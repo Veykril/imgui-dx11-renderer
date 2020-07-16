@@ -12,6 +12,7 @@ categories = ["gui", "rendering"]
 
 [dependencies]
 winapi = { version = "0.3", features = ["d3d11", "d3dcompiler", "dxgitype", "dxgi", "windef"] }
+wio = "0.2"
 imgui = "0.4"
 
 [dev-dependencies]

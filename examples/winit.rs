@@ -21,7 +21,9 @@ use winit::{
     window::WindowBuilder,
 };
 
-use std::ptr::{self, NonNull};
+use wio::com::ComPtr;
+
+use std::ptr;
 use std::time::Instant;
 
 const WINDOW_WIDTH: f64 = 760.0;
@@ -30,9 +32,9 @@ const WINDOW_HEIGHT: f64 = 760.0;
 unsafe fn create_device(
     hwnd: HWND,
 ) -> Option<(
-    *mut IDXGISwapChain,
-    *mut ID3D11Device,
-    *mut ID3D11DeviceContext,
+    ComPtr<IDXGISwapChain>,
+    ComPtr<ID3D11Device>,
+    ComPtr<ID3D11DeviceContext>,
 )> {
     let sc_desc = DXGI_SWAP_CHAIN_DESC {
         BufferDesc: DXGI_MODE_DESC {
@@ -68,7 +70,7 @@ unsafe fn create_device(
         ptr::null_mut(),
         D3D_DRIVER_TYPE_HARDWARE,
         ptr::null_mut(),
-        D3D11_CREATE_DEVICE_DEBUG,
+        0,
         feature_levels.as_ptr(),
         feature_levels.len() as u32,
         D3D11_SDK_VERSION,
@@ -81,24 +83,28 @@ unsafe fn create_device(
     {
         None
     } else {
-        Some((swapchain, device, context))
+        Some((
+            ComPtr::from_raw(swapchain),
+            ComPtr::from_raw(device),
+            ComPtr::from_raw(context),
+        ))
     }
 }
 
 unsafe fn create_render_target(
-    swapchain: *mut IDXGISwapChain,
-    device: *mut ID3D11Device,
-) -> *mut ID3D11RenderTargetView {
+    swapchain: &ComPtr<IDXGISwapChain>,
+    device: &ComPtr<ID3D11Device>,
+) -> ComPtr<ID3D11RenderTargetView> {
     let mut back_buffer = ptr::null_mut::<ID3D11Texture2D>();
     let mut main_rtv = ptr::null_mut();
-    (&*swapchain).GetBuffer(
+    swapchain.GetBuffer(
         0,
         &ID3D11Resource::uuidof(),
         &mut back_buffer as *mut *mut _ as *mut *mut _,
     );
-    (&*device).CreateRenderTargetView(back_buffer.cast(), ptr::null_mut(), &mut main_rtv);
+    device.CreateRenderTargetView(back_buffer.cast(), ptr::null_mut(), &mut main_rtv);
     (&*back_buffer).Release();
-    main_rtv
+    ComPtr::from_raw(main_rtv)
 }
 
 fn main() {
@@ -117,15 +123,11 @@ fn main() {
         unreachable!()
     };
     let (swapchain, device, context) = unsafe { create_device(hwnd.cast()) }.unwrap();
-    let mut main_rtv = unsafe { create_render_target(swapchain, device) };
+    let mut main_rtv = unsafe { create_render_target(&swapchain, &device) };
     let mut imgui = imgui::Context::create();
 
-    let mut renderer = imgui_dx11_renderer::Renderer::new(
-        &mut imgui,
-        unsafe { NonNull::new_unchecked(device) },
-        unsafe { NonNull::new_unchecked(context) },
-    )
-    .unwrap();
+    let mut renderer =
+        imgui_dx11_renderer::Renderer::new(&mut imgui, device.clone(), context.clone()).unwrap();
 
     let mut platform = WinitPlatform::init(&mut imgui);
     platform.attach_window(imgui.io_mut(), &window, HiDpiMode::Rounded);
@@ -158,8 +160,8 @@ fn main() {
         },
         Event::RedrawRequested(_) => {
             unsafe {
-                (&*context).OMSetRenderTargets(1, &main_rtv, ptr::null_mut());
-                (&*context).ClearRenderTargetView(main_rtv, &clear_color);
+                context.OMSetRenderTargets(1, &main_rtv.as_raw(), ptr::null_mut());
+                context.ClearRenderTargetView(main_rtv.as_raw(), &clear_color);
             }
             let ui = imgui.frame();
             imgui::Window::new(im_str!("Hello world"))
@@ -175,23 +177,11 @@ fn main() {
                         mouse_pos[1]
                     ));
                 });
-            imgui::Window::new(im_str!("Helldo world"))
-                .size([300.0, 100.0], imgui::Condition::FirstUseEver)
-                .build(&ui, || {
-                    ui.text(im_str!("Hello world!"));
-                    ui.text(im_str!("This...is...imgui-rs!"));
-                    ui.separator();
-                    let mouse_pos = ui.io().mouse_pos;
-                    ui.text(im_str!(
-                        "Mouse Position: ({:.1},{:.1})",
-                        mouse_pos[0],
-                        mouse_pos[1]
-                    ));
-                });
+            ui.show_demo_window(&mut true);
             platform.prepare_render(&ui, &window);
             renderer.render(ui.render()).unwrap();
             unsafe {
-                (&*swapchain).Present(1, 0);
+                swapchain.Present(1, 0);
             }
         },
         Event::WindowEvent {
@@ -202,16 +192,10 @@ fn main() {
             event: WindowEvent::Resized(winit::dpi::PhysicalSize { height, width }),
             ..
         } => unsafe {
-            (&*main_rtv).Release();
-            (&*swapchain).ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
-            main_rtv = create_render_target(swapchain, device);
+            swapchain.ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
+            main_rtv = create_render_target(&swapchain, &device);
         },
-        Event::LoopDestroyed => unsafe {
-            (&*main_rtv).Release();
-            (&*swapchain).Release();
-            (&*context).Release();
-            (&*device).Release();
-        },
+        Event::LoopDestroyed => (),
         event => {
             platform.handle_event(imgui.io_mut(), &window, &event);
         },
