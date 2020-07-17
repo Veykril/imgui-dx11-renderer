@@ -7,6 +7,26 @@ DirectX 11 renderer for [imgui-rs](https://github.com/Gekkio/imgui-rs).
 
 ## Usage
 
+This crate makes use of the ComPtr wrapper of the [wio](https://crates.io/crates/wio) crate.
+You have to wrap your device and context pointer in one to pass it to the renderer should you not use these internally already,
+tho care must be taken in regards of the reference count.
+
+```rust
+let device: ComPtr<ID3D11Device> = ...;
+let context: ComPtr<ID3D11DeviceContext> = ...;
+let imgui: imgui::Context = ...;
+let mut renderer = imgui_dx11_renderer::Renderer::new(&mut imgui, device.clone(), context.clone()).expect("imgui dx11 renderer creation failed");
+
+// rendering loop
+
+let ui = imgui.frame();
+
+// build your window via ui here
+...
+
+// then to render call
+renderer.render(ui.render()).expect("imgui rendering failed");
+```
 ## Documentation
 
 The crate is documented but imgui-rs doesn't currently build on docs.rs

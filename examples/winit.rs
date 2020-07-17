@@ -157,7 +157,7 @@ fn main() {
                 .expect("Failed to start frame");
             last_frame = io.update_delta_time(last_frame);
             window.request_redraw();
-        },
+        }
         Event::RedrawRequested(_) => {
             unsafe {
                 context.OMSetRenderTargets(1, &main_rtv.as_raw(), ptr::null_mut());
@@ -183,7 +183,7 @@ fn main() {
             unsafe {
                 swapchain.Present(1, 0);
             }
-        },
+        }
         Event::WindowEvent {
             event: WindowEvent::CloseRequested,
             ..
@@ -198,6 +198,6 @@ fn main() {
         Event::LoopDestroyed => (),
         event => {
             platform.handle_event(imgui.io_mut(), &window, &event);
-        },
+        }
     });
 }

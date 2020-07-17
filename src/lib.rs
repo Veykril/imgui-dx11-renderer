@@ -5,15 +5,13 @@
 
 use imgui::internal::RawWrapper;
 use imgui::{
-    BackendFlags, Context, DrawCmd, DrawCmdParams, DrawData, DrawIdx, DrawVert, ImString,
-    TextureId, Textures,
+    BackendFlags, DrawCmd, DrawCmdParams, DrawData, DrawIdx, DrawVert, TextureId, Textures,
 };
 
 use winapi::Interface;
 
 use winapi::shared::minwindef::{FALSE, TRUE};
-pub use winapi::shared::winerror::HRESULT;
-use winapi::shared::winerror::{DXGI_ERROR_INVALID_CALL, S_OK};
+use winapi::shared::winerror::{DXGI_ERROR_INVALID_CALL, HRESULT, S_OK};
 
 use winapi::shared::dxgi::*;
 use winapi::shared::dxgiformat::*;
@@ -23,7 +21,7 @@ use winapi::um::d3d11::*;
 use winapi::um::d3dcommon::*;
 use winapi::um::d3dcompiler::*;
 
-pub use wio::com::ComPtr;
+use wio::com::ComPtr;
 
 use core::mem;
 use core::ptr;
@@ -94,9 +92,9 @@ impl Renderer {
     /// [`ID3D11Device`]: https://docs.rs/winapi/0.3/x86_64-pc-windows-msvc/winapi/um/d3d11/struct.ID3D11Device.html
     /// [`ID3D11DeviceContext`]: https://docs.rs/winapi/0.3/x86_64-pc-windows-msvc/winapi/um/d3d11/struct.ID3D11DeviceContext.html
     pub fn new(
-        ctx: &mut Context,
+        im_ctx: &mut imgui::Context,
         device: ComPtr<ID3D11Device>,
-        context: ComPtr<ID3D11DeviceContext>,
+        device_context: ComPtr<ID3D11DeviceContext>,
     ) -> Result<Self> {
         unsafe {
             Self::acquire_factory(&device).and_then(|factory| {
@@ -106,18 +104,18 @@ impl Renderer {
                 let (blend_state, rasterizer_state, depth_stencil_state) =
                     Self::create_device_objects(&device)?;
                 let (font_resource_view, font_sampler) =
-                    Self::create_font_texture(ctx.fonts(), &device)?;
+                    Self::create_font_texture(im_ctx.fonts(), &device)?;
                 let vertex_buffer = Self::create_vertex_buffer(&device, 0)?;
                 let index_buffer = Self::create_index_buffer(&device, 0)?;
-                ctx.io_mut().backend_flags |= BackendFlags::RENDERER_HAS_VTX_OFFSET;
-                ctx.set_renderer_name(ImString::new(concat!(
+                im_ctx.io_mut().backend_flags |= BackendFlags::RENDERER_HAS_VTX_OFFSET;
+                im_ctx.set_renderer_name(imgui::ImString::new(concat!(
                     "imgui_dx11_renderer@",
                     env!("CARGO_PKG_VERSION")
                 )));
 
                 Ok(Renderer {
                     device,
-                    context,
+                    context: device_context,
                     factory,
                     vertex_shader,
                     pixel_shader,
@@ -173,6 +171,9 @@ impl Renderer {
     }
 
     /// Renders the given [`Ui`] with this renderer.
+    ///
+    /// Should the [`DrawData`] contain an invalid texture index the renderer
+    /// will return an error mid-rendering.
     ///
     /// [`Ui`]: https://docs.rs/imgui/*/imgui/struct.Ui.html
     pub fn render(&mut self, draw_data: &DrawData) -> Result<()> {
@@ -244,11 +245,11 @@ impl Renderer {
                             vertex_offset as i32,
                         );
                         index_offset += count;
-                    },
+                    }
                     DrawCmd::ResetRenderState => self.setup_render_state(draw_data),
                     DrawCmd::RawCallback { callback, raw_cmd } => {
                         callback(draw_list.raw(), raw_cmd)
-                    },
+                    }
                 }
             }
             vertex_offset += draw_list.vtx_buffer().len();
