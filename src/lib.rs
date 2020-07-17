@@ -12,7 +12,8 @@ use imgui::{
 use winapi::Interface;
 
 use winapi::shared::minwindef::{FALSE, TRUE};
-use winapi::shared::winerror::{HRESULT, S_OK};
+pub use winapi::shared::winerror::HRESULT;
+use winapi::shared::winerror::{DXGI_ERROR_INVALID_CALL, S_OK};
 
 use winapi::shared::dxgi::*;
 use winapi::shared::dxgiformat::*;
@@ -24,7 +25,6 @@ use winapi::um::d3dcompiler::*;
 
 pub use wio::com::ComPtr;
 
-use core::fmt;
 use core::mem;
 use core::ptr;
 use core::slice;
@@ -34,17 +34,24 @@ const FONT_TEX_ID: usize = !0;
 const VERTEX_BUF_ADD_CAPACITY: usize = 5000;
 const INDEX_BUF_ADD_CAPACITY: usize = 10000;
 
-unsafe fn com_ptr_from_fn<T, F>(fun: F) -> std::result::Result<ComPtr<T>, HRESULT>
+type Result<T> = core::result::Result<T, HRESULT>;
+
+#[inline]
+fn hresult(code: HRESULT) -> Result<()> {
+    match code {
+        S_OK => Ok(()),
+        err => Err(err),
+    }
+}
+
+unsafe fn com_ptr_from_fn<T, F>(fun: F) -> Result<ComPtr<T>>
 where
     T: Interface,
     F: FnOnce(&mut *mut T) -> HRESULT,
 {
     let mut ptr = ptr::null_mut();
     let res = fun(&mut ptr);
-    match res {
-        S_OK => Ok(ComPtr::from_raw(ptr)),
-        err => Err(err),
-    }
+    hresult(res).map(|()| ComPtr::from_raw(ptr))
 }
 
 unsafe fn com_ref_cast<T, U>(com_ptr: &ComPtr<T>) -> &ComPtr<U>
@@ -59,33 +66,6 @@ where
 struct VertexConstantBuffer {
     mvp: [[f32; 4]; 4],
 }
-
-type Result<T> = core::result::Result<T, RendererError>;
-
-/// The error type returned by the renderer.
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum RendererError {
-    /// The directx device ran out of memory
-    OutOfMemory,
-    /// The renderer received an invalid texture id
-    InvalidTexture(TextureId),
-    ///
-    FactoryAquisition,
-}
-
-impl fmt::Display for RendererError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            RendererError::OutOfMemory => write!(f, "device ran out of memory"),
-            RendererError::InvalidTexture(id) => {
-                write!(f, "failed to find texture with id {:?}", id)
-            },
-            RendererError::FactoryAquisition => write!(f, "unable to acquire IDXGIFactory"),
-        }
-    }
-}
-
-impl std::error::Error for RendererError {}
 
 /// A DirectX 11 renderer for (Imgui-rs)[https://docs.rs/imgui/*/imgui/].
 #[derive(Debug)]
@@ -119,23 +99,23 @@ impl Renderer {
         context: ComPtr<ID3D11DeviceContext>,
     ) -> Result<Self> {
         unsafe {
-            ctx.io_mut().backend_flags |= BackendFlags::RENDERER_HAS_VTX_OFFSET;
-            ctx.set_renderer_name(ImString::new(concat!(
-                "imgui_dx11_renderer@",
-                env!("CARGO_PKG_VERSION")
-            )));
-
             Self::acquire_factory(&device).and_then(|factory| {
                 let (vertex_shader, input_layout, constant_buffer) =
                     Self::create_vertex_shader(&device)?;
                 let pixel_shader = Self::create_pixel_shader(&device)?;
                 let (blend_state, rasterizer_state, depth_stencil_state) =
-                    Self::create_device_objects(&device);
+                    Self::create_device_objects(&device)?;
                 let (font_resource_view, font_sampler) =
                     Self::create_font_texture(ctx.fonts(), &device)?;
+                let vertex_buffer = Self::create_vertex_buffer(&device, 0)?;
+                let index_buffer = Self::create_index_buffer(&device, 0)?;
+                ctx.io_mut().backend_flags |= BackendFlags::RENDERER_HAS_VTX_OFFSET;
+                ctx.set_renderer_name(ImString::new(concat!(
+                    "imgui_dx11_renderer@",
+                    env!("CARGO_PKG_VERSION")
+                )));
+
                 Ok(Renderer {
-                    vertex_buffer: Self::create_vertex_buffer(&device, 0)?,
-                    index_buffer: Self::create_index_buffer(&device, 0)?,
                     device,
                     context,
                     factory,
@@ -148,6 +128,8 @@ impl Renderer {
                     depth_stencil_state,
                     font_resource_view,
                     font_sampler,
+                    vertex_buffer,
+                    index_buffer,
                     textures: Textures::new(),
                 })
             })
@@ -173,7 +155,6 @@ impl Renderer {
                     )
                 })
             })
-            .map_err(|_| RendererError::FactoryAquisition)
     }
 
     /// The textures registry of this renderer.
@@ -187,8 +168,8 @@ impl Renderer {
 
     /// The textures registry of this renderer.
     #[inline]
-    pub fn textures(&mut self) -> &mut Textures<ComPtr<ID3D11ShaderResourceView>> {
-        &mut self.textures
+    pub fn textures(&self) -> &Textures<ComPtr<ID3D11ShaderResourceView>> {
+        &self.textures
     }
 
     /// Renders the given [`Ui`] with this renderer.
@@ -244,7 +225,7 @@ impl Renderer {
                             } else {
                                 self.textures
                                     .get(texture_id)
-                                    .ok_or(RendererError::InvalidTexture(texture_id))?
+                                    .ok_or(DXGI_ERROR_INVALID_CALL)?
                             };
                             self.context.PSSetShaderResources(0, 1, &texture.as_raw());
                             last_tex = texture_id;
@@ -328,12 +309,8 @@ impl Renderer {
             MiscFlags: 0,
             StructureByteStride: 0,
         };
-        match com_ptr_from_fn(|vertex_buffer| {
-            device.CreateBuffer(&desc, ptr::null(), vertex_buffer)
-        }) {
-            Ok(vb) => Ok(Buffer(vb, len)),
-            Err(_) => Err(RendererError::OutOfMemory),
-        }
+        com_ptr_from_fn(|vertex_buffer| device.CreateBuffer(&desc, ptr::null(), vertex_buffer))
+            .map(|vb| Buffer(vb, len))
     }
 
     unsafe fn create_index_buffer(
@@ -349,36 +326,27 @@ impl Renderer {
             MiscFlags: 0,
             StructureByteStride: 0,
         };
-        match com_ptr_from_fn(|index_buffer| device.CreateBuffer(&desc, ptr::null(), index_buffer))
-        {
-            Ok(ib) => Ok(Buffer(ib, len)),
-            Err(_) => Err(RendererError::OutOfMemory),
-        }
+        com_ptr_from_fn(|index_buffer| device.CreateBuffer(&desc, ptr::null(), index_buffer))
+            .map(|ib| Buffer(ib, len))
     }
 
     unsafe fn write_buffers(&mut self, draw_data: &DrawData) -> Result<()> {
         let mut vtx_resource = mem::zeroed();
         let mut idx_resource = mem::zeroed();
-        if self.context.Map(
+        hresult(self.context.Map(
             self.vertex_buffer.as_raw().cast(),
             0,
             D3D11_MAP_WRITE_DISCARD,
             0,
             &mut vtx_resource,
-        ) != S_OK
-        {
-            panic!();
-        }
-        if self.context.Map(
+        ))?;
+        hresult(self.context.Map(
             self.index_buffer.as_raw().cast(),
             0,
             D3D11_MAP_WRITE_DISCARD,
             0,
             &mut idx_resource,
-        ) != S_OK
-        {
-            panic!();
-        }
+        ))?;
 
         let mut vtx_dst = slice::from_raw_parts_mut(
             vtx_resource.pData.cast::<DrawVert>(),
@@ -402,16 +370,13 @@ impl Renderer {
 
         // constant buffer
         let mut mapped_resource = mem::zeroed();
-        if self.context.Map(
+        hresult(self.context.Map(
             com_ref_cast(&self.constant_buffer).as_raw(),
             0,
             D3D11_MAP_WRITE_DISCARD,
             0,
             &mut mapped_resource,
-        ) != S_OK
-        {
-            panic!()
-        }
+        ))?;
 
         let l = draw_data.display_pos[0];
         let r = draw_data.display_pos[0] + draw_data.display_size[0];
@@ -456,8 +421,7 @@ impl Renderer {
             SysMemSlicePitch: 0,
         };
         let texture =
-            com_ptr_from_fn(|texture| device.CreateTexture2D(&desc, &sub_resource, texture))
-                .unwrap();
+            com_ptr_from_fn(|texture| device.CreateTexture2D(&desc, &sub_resource, texture))?;
 
         let mut desc = D3D11_SHADER_RESOURCE_VIEW_DESC {
             Format: DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -474,8 +438,7 @@ impl Renderer {
                 &desc,
                 font_texture_view,
             )
-        })
-        .unwrap();
+        })?;
 
         fonts.tex_id = TextureId::from(FONT_TEX_ID);
 
@@ -492,7 +455,7 @@ impl Renderer {
             MaxLOD: 0.0,
         };
         let font_sampler =
-            com_ptr_from_fn(|font_sampler| device.CreateSamplerState(&desc, font_sampler)).unwrap();
+            com_ptr_from_fn(|font_sampler| device.CreateSamplerState(&desc, font_sampler))?;
         Ok((font_texture_view, font_sampler))
     }
 
@@ -518,17 +481,15 @@ impl Renderer {
                 vs_blob,
                 ptr::null_mut(),
             )
-        })
-        .unwrap();
+        })?;
         let vs_shader = com_ptr_from_fn(|vs_shader| {
             device.CreateVertexShader(
-                (&*vs_blob).GetBufferPointer(),
-                (&*vs_blob).GetBufferSize(),
+                vs_blob.GetBufferPointer(),
+                vs_blob.GetBufferSize(),
                 ptr::null_mut(),
                 vs_shader,
             )
-        })
-        .unwrap();
+        })?;
 
         let local_layout = [
             D3D11_INPUT_ELEMENT_DESC {
@@ -564,12 +525,11 @@ impl Renderer {
             device.CreateInputLayout(
                 local_layout.as_ptr(),
                 local_layout.len() as _,
-                (&*vs_blob).GetBufferPointer(),
-                (&*vs_blob).GetBufferSize(),
+                vs_blob.GetBufferPointer(),
+                vs_blob.GetBufferSize(),
                 input_layout,
             )
-        })
-        .unwrap();
+        })?;
 
         let desc = D3D11_BUFFER_DESC {
             ByteWidth: mem::size_of::<VertexConstantBuffer>() as _,
@@ -581,8 +541,7 @@ impl Renderer {
         };
         let vertex_constant_buffer = com_ptr_from_fn(|vertex_constant_buffer| {
             device.CreateBuffer(&desc, ptr::null_mut(), vertex_constant_buffer)
-        })
-        .unwrap();
+        })?;
         Ok((vs_shader, input_layout, vertex_constant_buffer))
     }
 
@@ -605,27 +564,25 @@ impl Renderer {
                 ps_blob,
                 ptr::null_mut(),
             )
-        })
-        .unwrap();
+        })?;
         let ps_shader = com_ptr_from_fn(|ps_shader| {
             device.CreatePixelShader(
-                (&*ps_blob).GetBufferPointer(),
-                (&*ps_blob).GetBufferSize(),
+                ps_blob.GetBufferPointer(),
+                ps_blob.GetBufferSize(),
                 ptr::null_mut(),
                 ps_shader,
             )
-        })
-        .unwrap();
+        })?;
         Ok(ps_shader)
     }
 
     unsafe fn create_device_objects(
         device: &ComPtr<ID3D11Device>,
-    ) -> (
+    ) -> Result<(
         ComPtr<ID3D11BlendState>,
         ComPtr<ID3D11RasterizerState>,
         ComPtr<ID3D11DepthStencilState>,
-    ) {
+    )> {
         let mut desc = D3D11_BLEND_DESC {
             AlphaToCoverageEnable: TRUE,
             IndependentBlendEnable: FALSE,
@@ -642,7 +599,7 @@ impl Renderer {
             RenderTargetWriteMask: D3D11_COLOR_WRITE_ENABLE_ALL as u8,
         };
         let blend_state =
-            com_ptr_from_fn(|blend_state| device.CreateBlendState(&desc, blend_state)).unwrap();
+            com_ptr_from_fn(|blend_state| device.CreateBlendState(&desc, blend_state))?;
 
         let desc = D3D11_RASTERIZER_DESC {
             FillMode: D3D11_FILL_SOLID,
@@ -658,8 +615,7 @@ impl Renderer {
         };
         let rasterizer_state = com_ptr_from_fn(|rasterizer_state| {
             device.CreateRasterizerState(&desc, rasterizer_state)
-        })
-        .unwrap();
+        })?;
 
         let stencil_op_desc = D3D11_DEPTH_STENCILOP_DESC {
             StencilFailOp: D3D11_STENCIL_OP_KEEP,
@@ -679,9 +635,8 @@ impl Renderer {
         };
         let depth_stencil_state = com_ptr_from_fn(|depth_stencil_state| {
             device.CreateDepthStencilState(&desc, depth_stencil_state)
-        })
-        .unwrap();
-        (blend_state, rasterizer_state, depth_stencil_state)
+        })?;
+        Ok((blend_state, rasterizer_state, depth_stencil_state))
     }
 }
 
