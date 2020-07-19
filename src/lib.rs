@@ -88,49 +88,64 @@ pub struct Renderer {
 impl Renderer {
     /// Creates a new renderer for the given [`ID3D11Device`].
     ///
+    /// # Safety
+    ///
+    /// `device` must be a valid [`ID3D11Device`] pointer.
+    ///
     /// [`ID3D11Device`]: https://docs.rs/winapi/0.3/x86_64-pc-windows-msvc/winapi/um/d3d11/struct.ID3D11Device.html
-    pub fn new(im_ctx: &mut imgui::Context, device: ComPtr<ID3D11Device>) -> Result<Self> {
-        unsafe {
-            Self::acquire_factory(&device).and_then(|factory| {
-                let (vertex_shader, input_layout, constant_buffer) =
-                    Self::create_vertex_shader(&device)?;
-                let pixel_shader = Self::create_pixel_shader(&device)?;
-                let (blend_state, rasterizer_state, depth_stencil_state) =
-                    Self::create_device_objects(&device)?;
-                let (font_resource_view, font_sampler) =
-                    Self::create_font_texture(im_ctx.fonts(), &device)?;
-                let vertex_buffer = Self::create_vertex_buffer(&device, 0)?;
-                let index_buffer = Self::create_index_buffer(&device, 0)?;
-                let context = {
-                    let mut context = ptr::null_mut();
-                    device.GetImmediateContext(&mut context);
-                    ComPtr::from_raw(context)
-                };
-                im_ctx.io_mut().backend_flags |= BackendFlags::RENDERER_HAS_VTX_OFFSET;
-                im_ctx.set_renderer_name(imgui::ImString::new(concat!(
-                    "imgui_dx11_renderer@",
-                    env!("CARGO_PKG_VERSION")
-                )));
+    pub unsafe fn new(im_ctx: &mut imgui::Context, device: ComPtr<ID3D11Device>) -> Result<Self> {
+        Self::acquire_factory(&device).and_then(|factory| {
+            let (vertex_shader, input_layout, constant_buffer) =
+                Self::create_vertex_shader(&device)?;
+            let pixel_shader = Self::create_pixel_shader(&device)?;
+            let (blend_state, rasterizer_state, depth_stencil_state) =
+                Self::create_device_objects(&device)?;
+            let (font_resource_view, font_sampler) =
+                Self::create_font_texture(im_ctx.fonts(), &device)?;
+            let vertex_buffer = Self::create_vertex_buffer(&device, 0)?;
+            let index_buffer = Self::create_index_buffer(&device, 0)?;
+            let context = {
+                let mut context = ptr::null_mut();
+                device.GetImmediateContext(&mut context);
+                ComPtr::from_raw(context)
+            };
+            im_ctx.io_mut().backend_flags |= BackendFlags::RENDERER_HAS_VTX_OFFSET;
+            im_ctx.set_renderer_name(imgui::ImString::new(concat!(
+                "imgui_dx11_renderer@",
+                env!("CARGO_PKG_VERSION")
+            )));
 
-                Ok(Renderer {
-                    device,
-                    context,
-                    factory,
-                    vertex_shader,
-                    pixel_shader,
-                    input_layout,
-                    constant_buffer,
-                    blend_state,
-                    rasterizer_state,
-                    depth_stencil_state,
-                    font_resource_view,
-                    font_sampler,
-                    vertex_buffer,
-                    index_buffer,
-                    textures: Textures::new(),
-                })
+            Ok(Renderer {
+                device,
+                context,
+                factory,
+                vertex_shader,
+                pixel_shader,
+                input_layout,
+                constant_buffer,
+                blend_state,
+                rasterizer_state,
+                depth_stencil_state,
+                font_resource_view,
+                font_sampler,
+                vertex_buffer,
+                index_buffer,
+                textures: Textures::new(),
             })
-        }
+        })
+    }
+
+    /// Creates a new renderer for the given [`ID3D11Device`].
+    ///
+    /// # Safety
+    ///
+    /// `device` must be a valid [`ID3D11Device`] pointer.
+    ///
+    /// [`ID3D11Device`]: https://docs.rs/winapi/0.3/x86_64-pc-windows-msvc/winapi/um/d3d11/struct.ID3D11Device.html
+    pub unsafe fn new_raw(im_ctx: &mut imgui::Context, device: *mut ID3D11Device) -> Result<Self> {
+        let device = ComPtr::from_raw(device);
+        device.AddRef();
+        Self::new(im_ctx, device)
     }
 
     unsafe fn acquire_factory(device: &ComPtr<ID3D11Device>) -> Result<ComPtr<IDXGIFactory>> {
