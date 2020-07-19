@@ -192,8 +192,10 @@ fn main() {
             event: WindowEvent::Resized(winit::dpi::PhysicalSize { height, width }),
             ..
         } => unsafe {
+            ptr::drop_in_place(&mut main_rtv);
             swapchain.ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
-            main_rtv = create_render_target(&swapchain, &device);
+            ptr::write(&mut main_rtv, create_render_target(&swapchain, &device));
+            platform.handle_event(imgui.io_mut(), &window, &event);
         },
         Event::LoopDestroyed => (),
         event => {
