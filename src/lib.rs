@@ -86,16 +86,10 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    /// Creates a new renderer for the given [`ID3D11Device`] and
-    /// [`ID3D11DeviceContext`].
+    /// Creates a new renderer for the given [`ID3D11Device`].
     ///
     /// [`ID3D11Device`]: https://docs.rs/winapi/0.3/x86_64-pc-windows-msvc/winapi/um/d3d11/struct.ID3D11Device.html
-    /// [`ID3D11DeviceContext`]: https://docs.rs/winapi/0.3/x86_64-pc-windows-msvc/winapi/um/d3d11/struct.ID3D11DeviceContext.html
-    pub fn new(
-        im_ctx: &mut imgui::Context,
-        device: ComPtr<ID3D11Device>,
-        device_context: ComPtr<ID3D11DeviceContext>,
-    ) -> Result<Self> {
+    pub fn new(im_ctx: &mut imgui::Context, device: ComPtr<ID3D11Device>) -> Result<Self> {
         unsafe {
             Self::acquire_factory(&device).and_then(|factory| {
                 let (vertex_shader, input_layout, constant_buffer) =
@@ -107,6 +101,11 @@ impl Renderer {
                     Self::create_font_texture(im_ctx.fonts(), &device)?;
                 let vertex_buffer = Self::create_vertex_buffer(&device, 0)?;
                 let index_buffer = Self::create_index_buffer(&device, 0)?;
+                let context = {
+                    let mut context = ptr::null_mut();
+                    device.GetImmediateContext(&mut context);
+                    ComPtr::from_raw(context)
+                };
                 im_ctx.io_mut().backend_flags |= BackendFlags::RENDERER_HAS_VTX_OFFSET;
                 im_ctx.set_renderer_name(imgui::ImString::new(concat!(
                     "imgui_dx11_renderer@",
@@ -115,7 +114,7 @@ impl Renderer {
 
                 Ok(Renderer {
                     device,
-                    context: device_context,
+                    context,
                     factory,
                     vertex_shader,
                     pixel_shader,
@@ -135,6 +134,7 @@ impl Renderer {
     }
 
     unsafe fn acquire_factory(device: &ComPtr<ID3D11Device>) -> Result<ComPtr<IDXGIFactory>> {
+        // currently unused, but will potentially be required when the docking feature is finalized
         device
             .cast::<IDXGIDevice>()
             .and_then(|dxgi_device| {
@@ -191,7 +191,7 @@ impl Renderer {
                     Self::create_index_buffer(&self.device, draw_data.total_idx_count as usize)?;
             }
 
-            let _state_backup = StateBackup::backup(self.context.clone());
+            let _state_guard = StateBackup::backup(self.context.clone());
 
             self.write_buffers(draw_data)?;
             self.setup_render_state(draw_data);
@@ -332,22 +332,24 @@ impl Renderer {
     }
 
     unsafe fn write_buffers(&mut self, draw_data: &DrawData) -> Result<()> {
-        let mut vtx_resource = mem::zeroed();
-        let mut idx_resource = mem::zeroed();
+        let mut vtx_resource = mem::MaybeUninit::zeroed();
+        let mut idx_resource = mem::MaybeUninit::zeroed();
         hresult(self.context.Map(
             self.vertex_buffer.as_raw().cast(),
             0,
             D3D11_MAP_WRITE_DISCARD,
             0,
-            &mut vtx_resource,
+            vtx_resource.as_mut_ptr(),
         ))?;
         hresult(self.context.Map(
             self.index_buffer.as_raw().cast(),
             0,
             D3D11_MAP_WRITE_DISCARD,
             0,
-            &mut idx_resource,
+            idx_resource.as_mut_ptr(),
         ))?;
+        let vtx_resource = vtx_resource.assume_init();
+        let idx_resource = idx_resource.assume_init();
 
         let mut vtx_dst = slice::from_raw_parts_mut(
             vtx_resource.pData.cast::<DrawVert>(),
@@ -357,27 +359,29 @@ impl Renderer {
             idx_resource.pData.cast::<DrawIdx>(),
             draw_data.total_idx_count as usize,
         );
-        for draw_list in draw_data.draw_lists() {
-            for (&vertex, vtx_dst) in draw_list.vtx_buffer().iter().zip(vtx_dst.iter_mut()) {
-                *vtx_dst = vertex;
-            }
-            idx_dst[..draw_list.idx_buffer().len()].copy_from_slice(draw_list.idx_buffer());
-            vtx_dst = &mut vtx_dst[draw_list.vtx_buffer().len()..];
-            idx_dst = &mut idx_dst[draw_list.idx_buffer().len()..];
+        for (vbuf, ibuf) in draw_data
+            .draw_lists()
+            .map(|draw_list| (draw_list.vtx_buffer(), draw_list.idx_buffer()))
+        {
+            vtx_dst[..vbuf.len()].copy_from_slice(vbuf);
+            idx_dst[..ibuf.len()].copy_from_slice(ibuf);
+            vtx_dst = &mut vtx_dst[vbuf.len()..];
+            idx_dst = &mut idx_dst[ibuf.len()..];
         }
 
         self.context.Unmap(self.vertex_buffer.as_raw().cast(), 0);
         self.context.Unmap(self.index_buffer.as_raw().cast(), 0);
 
         // constant buffer
-        let mut mapped_resource = mem::zeroed();
+        let mut mapped_resource = mem::MaybeUninit::zeroed();
         hresult(self.context.Map(
             com_ref_cast(&self.constant_buffer).as_raw(),
             0,
             D3D11_MAP_WRITE_DISCARD,
             0,
-            &mut mapped_resource,
+            mapped_resource.as_mut_ptr(),
         ))?;
+        let mapped_resource = mapped_resource.assume_init();
 
         let l = draw_data.display_pos[0];
         let r = draw_data.display_pos[0] + draw_data.display_size[0];

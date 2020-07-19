@@ -126,8 +126,7 @@ fn main() {
     let mut main_rtv = unsafe { create_render_target(&swapchain, &device) };
     let mut imgui = imgui::Context::create();
 
-    let mut renderer =
-        imgui_dx11_renderer::Renderer::new(&mut imgui, device.clone(), context.clone()).unwrap();
+    let mut renderer = imgui_dx11_renderer::Renderer::new(&mut imgui, device.clone()).unwrap();
 
     let mut platform = WinitPlatform::init(&mut imgui);
     platform.attach_window(imgui.io_mut(), &window, HiDpiMode::Rounded);
