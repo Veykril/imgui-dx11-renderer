@@ -188,7 +188,7 @@ impl Renderer {
     /// Renders the given [`Ui`] with this renderer.
     ///
     /// Should the [`DrawData`] contain an invalid texture index the renderer
-    /// will return an error mid-rendering.
+    /// will return `DXGI_ERROR_INVALID_CALL` and immediately stop rendering.
     ///
     /// [`Ui`]: https://docs.rs/imgui/*/imgui/struct.Ui.html
     pub fn render(&mut self, draw_data: &DrawData) -> Result<()> {
@@ -356,13 +356,16 @@ impl Renderer {
             0,
             vtx_resource.as_mut_ptr(),
         ))?;
-        hresult(self.context.Map(
+        if let e @ Err(_) = hresult(self.context.Map(
             self.index_buffer.as_raw().cast(),
             0,
             D3D11_MAP_WRITE_DISCARD,
             0,
             idx_resource.as_mut_ptr(),
-        ))?;
+        )) {
+            self.context.Unmap(self.vertex_buffer.as_raw().cast(), 0);
+            e?;
+        }
         let vtx_resource = vtx_resource.assume_init();
         let idx_resource = idx_resource.assume_init();
 
