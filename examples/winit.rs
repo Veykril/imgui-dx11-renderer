@@ -53,7 +53,7 @@ unsafe fn create_device(
             Quality: 0,
         },
         BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
-        BufferCount: 2,
+        BufferCount: 3,
         OutputWindow: hwnd,
         Windowed: TRUE,
         SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
@@ -125,9 +125,7 @@ fn main() {
     let (swapchain, device, context) = unsafe { create_device(hwnd.cast()) }.unwrap();
     let mut main_rtv = unsafe { create_render_target(&swapchain, &device) };
     let mut imgui = imgui::Context::create();
-
-    let mut renderer =
-        unsafe { imgui_dx11_renderer::Renderer::new(&mut imgui, device.clone()).unwrap() };
+    imgui.set_ini_filename(None);
 
     let mut platform = WinitPlatform::init(&mut imgui);
     platform.attach_window(imgui.io_mut(), &window, HiDpiMode::Rounded);
@@ -143,7 +141,8 @@ fn main() {
 
     imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
 
-    imgui.set_ini_filename(None);
+    let mut renderer =
+        unsafe { imgui_dx11_renderer::Renderer::new(&mut imgui, device.clone()).unwrap() };
     let clear_color = [0.45, 0.55, 0.60, 1.00];
 
     let mut last_frame = Instant::now();
