@@ -607,7 +607,7 @@ impl Renderer {
         ComPtr<ID3D11DepthStencilState>,
     )> {
         let mut desc = D3D11_BLEND_DESC {
-            AlphaToCoverageEnable: TRUE,
+            AlphaToCoverageEnable: FALSE,
             IndependentBlendEnable: FALSE,
             RenderTarget: std::mem::zeroed(),
         };
