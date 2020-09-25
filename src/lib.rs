@@ -19,7 +19,6 @@ use winapi::shared::dxgitype::*;
 
 use winapi::um::d3d11::*;
 use winapi::um::d3dcommon::*;
-use winapi::um::d3dcompiler::*;
 
 use wio::com::ComPtr;
 
@@ -489,26 +488,12 @@ impl Renderer {
         ComPtr<ID3D11InputLayout>,
         ComPtr<ID3D11Buffer>,
     )> {
-        static VERTEX_SHADER: &str = include_str!("vertex_shader.vs_4_0");
-        let vs_blob = com_ptr_from_fn(|vs_blob| {
-            D3DCompile(
-                VERTEX_SHADER.as_ptr().cast(),
-                VERTEX_SHADER.len(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-                "main\0".as_ptr().cast(),
-                "vs_4_0\0".as_ptr().cast(),
-                0,
-                0,
-                vs_blob,
-                ptr::null_mut(),
-            )
-        })?;
+        const VERTEX_SHADER: &[u8] =
+            include_bytes!(concat!(env!("OUT_DIR"), "/vertex_shader.vs_4_0"));
         let vs_shader = com_ptr_from_fn(|vs_shader| {
             device.CreateVertexShader(
-                vs_blob.GetBufferPointer(),
-                vs_blob.GetBufferSize(),
+                VERTEX_SHADER.as_ptr().cast(),
+                VERTEX_SHADER.len(),
                 ptr::null_mut(),
                 vs_shader,
             )
@@ -548,8 +533,8 @@ impl Renderer {
             device.CreateInputLayout(
                 local_layout.as_ptr(),
                 local_layout.len() as _,
-                vs_blob.GetBufferPointer(),
-                vs_blob.GetBufferSize(),
+                VERTEX_SHADER.as_ptr().cast(),
+                VERTEX_SHADER.len(),
                 input_layout,
             )
         })?;
@@ -571,27 +556,13 @@ impl Renderer {
     unsafe fn create_pixel_shader(
         device: &ComPtr<ID3D11Device>,
     ) -> Result<ComPtr<ID3D11PixelShader>> {
-        static PIXEL_SHADER: &str = include_str!("pixel_shader.ps_4_0");
+        const PIXEL_SHADER: &[u8] =
+            include_bytes!(concat!(env!("OUT_DIR"), "/pixel_shader.ps_4_0"));
 
-        let ps_blob = com_ptr_from_fn(|ps_blob| {
-            D3DCompile(
-                PIXEL_SHADER.as_ptr().cast(),
-                PIXEL_SHADER.len(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-                "main\0".as_ptr().cast(),
-                "ps_4_0\0".as_ptr().cast(),
-                0,
-                0,
-                ps_blob,
-                ptr::null_mut(),
-            )
-        })?;
         let ps_shader = com_ptr_from_fn(|ps_shader| {
             device.CreatePixelShader(
-                ps_blob.GetBufferPointer(),
-                ps_blob.GetBufferSize(),
+                PIXEL_SHADER.as_ptr().cast(),
+                PIXEL_SHADER.len(),
                 ptr::null_mut(),
                 ps_shader,
             )

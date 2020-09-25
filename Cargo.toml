@@ -11,9 +11,12 @@ readme = "README.md"
 categories = ["gui", "rendering"]
 
 [dependencies]
-winapi = { version = "0.3", features = ["d3d11", "d3dcompiler", "dxgitype", "dxgi", "windef"] }
+winapi = { version = "0.3", features = ["d3d11", "dxgitype", "dxgiformat", "dxgi", "minwindef", "winerror"] }
 wio = "0.2"
 imgui = "0.5"
+
+[build-dependencies]
+winapi = { version = "0.3", features = ["d3dcompiler", "d3dcommon"] }
 
 [dev-dependencies]
 imgui = "0.5"
