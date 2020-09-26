@@ -205,7 +205,7 @@ impl Renderer {
                     Self::create_index_buffer(&self.device, draw_data.total_idx_count as usize)?;
             }
 
-            let _state_guard = StateBackup::backup(self.context.clone());
+            let _state_guard = StateBackup::backup(&self.context);
 
             self.write_buffers(draw_data)?;
             self.setup_render_state(draw_data);
@@ -214,7 +214,7 @@ impl Renderer {
         Ok(())
     }
 
-    unsafe fn render_impl(&mut self, draw_data: &DrawData) -> Result<()> {
+    unsafe fn render_impl(&self, draw_data: &DrawData) -> Result<()> {
         let clip_off = draw_data.display_pos;
         let clip_scale = draw_data.framebuffer_scale;
         let mut vertex_offset = 0;
@@ -272,7 +272,9 @@ impl Renderer {
     }
 
     #[rustfmt::skip]
-    unsafe fn setup_render_state(&mut self, draw_data: &DrawData) {
+    unsafe fn setup_render_state(&self, draw_data: &DrawData) {
+        let ctx = &*self.context;
+
         let vp = D3D11_VIEWPORT {
             TopLeftX: 0.0,
             TopLeftY: 0.0,
@@ -281,12 +283,12 @@ impl Renderer {
             MinDepth: 0.0,
             MaxDepth: 1.0,
         };
-        self.context.RSSetViewports(1, &vp);
+        ctx.RSSetViewports(1, &vp);
 
         let stride = mem::size_of::<DrawVert>() as u32;
-        self.context.IASetInputLayout(self.input_layout.as_raw());
-        self.context.IASetVertexBuffers(0, 1, &self.vertex_buffer.as_raw(), &stride, &0);
-        self.context.IASetIndexBuffer(
+        ctx.IASetInputLayout(self.input_layout.as_raw());
+        ctx.IASetVertexBuffers(0, 1, &self.vertex_buffer.as_raw(), &stride, &0);
+        ctx.IASetIndexBuffer(
             self.index_buffer.as_raw(),
             if mem::size_of::<DrawIdx>() == 2 {
                 DXGI_FORMAT_R16_UINT
@@ -295,20 +297,20 @@ impl Renderer {
             },
             0,
         );
-        self.context.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        self.context.VSSetShader(self.vertex_shader.as_raw(), ptr::null(), 0);
-        self.context.VSSetConstantBuffers(0, 1, &self.constant_buffer.as_raw());
-        self.context.PSSetShader(self.pixel_shader.as_raw(), ptr::null(), 0);
-        self.context.PSSetSamplers(0, 1, &self.font_sampler.as_raw());
-        self.context.GSSetShader(ptr::null_mut(), ptr::null(), 0);
-        self.context.HSSetShader(ptr::null_mut(), ptr::null(), 0);
-        self.context.DSSetShader(ptr::null_mut(), ptr::null(), 0);
-        self.context.CSSetShader(ptr::null_mut(), ptr::null(), 0);
+        ctx.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        ctx.VSSetShader(self.vertex_shader.as_raw(), ptr::null(), 0);
+        ctx.VSSetConstantBuffers(0, 1, &self.constant_buffer.as_raw());
+        ctx.PSSetShader(self.pixel_shader.as_raw(), ptr::null(), 0);
+        ctx.PSSetSamplers(0, 1, &self.font_sampler.as_raw());
+        ctx.GSSetShader(ptr::null_mut(), ptr::null(), 0);
+        ctx.HSSetShader(ptr::null_mut(), ptr::null(), 0);
+        ctx.DSSetShader(ptr::null_mut(), ptr::null(), 0);
+        ctx.CSSetShader(ptr::null_mut(), ptr::null(), 0);
 
         let blend_factor = [0.0; 4];
-        self.context.OMSetBlendState(self.blend_state.as_raw(), &blend_factor, 0xFFFFFFFF);
-        self.context.OMSetDepthStencilState(self.depth_stencil_state.as_raw(), 0);
-        self.context.RSSetState(self.rasterizer_state.as_raw());
+        ctx.OMSetBlendState(self.blend_state.as_raw(), &blend_factor, 0xFFFFFFFF);
+        ctx.OMSetDepthStencilState(self.depth_stencil_state.as_raw(), 0);
+        ctx.RSSetState(self.rasterizer_state.as_raw());
     }
 
     unsafe fn create_vertex_buffer(
@@ -345,7 +347,7 @@ impl Renderer {
             .map(|ib| Buffer(ib, len))
     }
 
-    unsafe fn write_buffers(&mut self, draw_data: &DrawData) -> Result<()> {
+    unsafe fn write_buffers(&self, draw_data: &DrawData) -> Result<()> {
         let mut vtx_resource = mem::MaybeUninit::zeroed();
         let mut idx_resource = mem::MaybeUninit::zeroed();
         hresult(self.context.Map(
@@ -644,7 +646,7 @@ impl Buffer {
     }
 
     #[inline]
-    fn as_raw(&mut self) -> *mut ID3D11Buffer {
+    fn as_raw(&self) -> *mut ID3D11Buffer {
         self.0.as_raw()
     }
 }
@@ -671,8 +673,8 @@ fn opt_com_ptr_as_raw<T>(ptr: &OptComPtr<T>) -> *mut T {
         .unwrap_or_else(ptr::null_mut)
 }
 
-struct StateBackup {
-    context: ComPtr<ID3D11DeviceContext>,
+struct StateBackup<'ctx> {
+    context: &'ctx ID3D11DeviceContext,
 
     scissor_rects: [D3D11_RECT; D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize],
     scissor_rects_count: u32,
@@ -706,10 +708,9 @@ struct StateBackup {
     input_layout: OptComPtr<ID3D11InputLayout>,
 }
 
-impl StateBackup {
+impl<'ctx> StateBackup<'ctx> {
     #[rustfmt::skip]
-    unsafe fn backup(context: ComPtr<ID3D11DeviceContext>) -> Self {
-        let ctx = &*context;
+    unsafe fn backup(ctx: &'ctx ID3D11DeviceContext) -> Self {
         let mut scissor_rects_count = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
         let mut viewports_count = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
         let mut scissor_rects = [D3D11_RECT {
@@ -791,7 +792,7 @@ impl StateBackup {
         });
         let input_layout = com_ptr_from_fn_opt(|input_layout| ctx.IAGetInputLayout(input_layout));
         StateBackup {
-            context, scissor_rects, scissor_rects_count, viewports, viewports_count,
+            context:ctx, scissor_rects, scissor_rects_count, viewports, viewports_count,
             rasterizer_state, blend_state, blend_factor, sample_mask, depth_stencil_state,
             stencil_ref, shader_resource, sampler, ps_shader, ps_instances, vs_shader,
             vs_instances, constant_buffer, gs_shader, gs_instances, index_buffer,
@@ -801,11 +802,11 @@ impl StateBackup {
     }
 }
 
-impl Drop for StateBackup {
+impl Drop for StateBackup<'_> {
     #[rustfmt::skip]
     fn drop(&mut self) {
         unsafe {
-            let ctx = &self.context;
+            let ctx = self.context;
             ctx.RSSetScissorRects(self.scissor_rects_count, self.scissor_rects.as_ptr());
             ctx.RSSetViewports(self.viewports_count, self.viewports.as_ptr());
             ctx.RSSetState(opt_com_ptr_as_raw(&self.rasterizer_state));
@@ -827,13 +828,13 @@ impl Drop for StateBackup {
             ctx.IASetVertexBuffers(0,1, &opt_com_ptr_as_raw(&self.vertex_buffer), &self.vertex_buffer_stride, &self.vertex_buffer_offset);
             ctx.IASetInputLayout(opt_com_ptr_as_raw(&self.input_layout));
 
-            for instance in &*self.vs_instances {
+            for instance in self.vs_instances.as_ref().into_iter().flatten() {
                 instance.Release();
             }
-            for instance in &*self.ps_instances {
+            for instance in self.ps_instances.as_ref().into_iter().flatten() {
                 instance.Release();
             }
-            for instance in &*self.gs_instances {
+            for instance in self.gs_instances.as_ref().into_iter().flatten() {
                 instance.Release();
             }
         }
