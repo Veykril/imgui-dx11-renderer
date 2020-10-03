@@ -26,6 +26,9 @@ let ui = imgui.frame();
 // then to render call
 renderer.render(ui.render()).expect("imgui rendering failed");
 ```
+
+The renderer backs up and reapplies the majority of the d3d11 renderering state when invoked.
+
 ## Documentation
 
 The crate is documented but imgui-rs doesn't currently build on docs.rs
