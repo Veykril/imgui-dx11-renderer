@@ -1,6 +1,6 @@
 [package]
 name = "imgui-dx11-renderer"
-version = "0.2.1"
+version = "0.7.0"
 authors = ["Lukas Wirth <lukastw97@gmail.com>"]
 edition = "2018"
 description = "DirectX 11 renderer for the imgui crate"
@@ -11,17 +11,24 @@ readme = "README.md"
 categories = ["gui", "rendering"]
 
 [dependencies]
-winapi = { version = "0.3", features = ["d3d11", "dxgitype", "dxgiformat", "dxgi", "minwindef", "winerror"] }
+winapi = { version = "0.3", features = [
+    "d3d11",
+    "dxgitype",
+    "dxgiformat",
+    "dxgi",
+    "minwindef",
+    "winerror",
+] }
 wio = "0.2"
-imgui = "0.5"
+imgui = "0.7"
 
 [build-dependencies]
 winapi = { version = "0.3", features = ["d3dcompiler", "d3dcommon"] }
 
 [dev-dependencies]
-imgui = "0.5"
-imgui-winit-support = "0.5"
-winit = "0.22"
+imgui = "0.7"
+imgui-winit-support = "0.7"
+winit = "0.24"
 raw-window-handle = "0.3"
 
 [package.metadata.docs.rs]
