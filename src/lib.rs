@@ -36,7 +36,8 @@ const INDEX_BUF_ADD_CAPACITY: usize = 10000;
 const DXGI_ERROR_INVALID_CALL: NonZeroI32 =
     unsafe { NonZeroI32::new_unchecked(winerror::DXGI_ERROR_INVALID_CALL) };
 
-/// The result type returned by this library. It's a simple wrapper around window's hresult.
+/// The result type returned by this library. It's a simple wrapper around
+/// window's hresult.
 pub type HResult<T> = core::result::Result<T, NonZeroI32>;
 
 fn hresult(code: HRESULT) -> HResult<()> {
@@ -153,7 +154,8 @@ impl Renderer {
     }
 
     unsafe fn acquire_factory(device: &ComPtr<ID3D11Device>) -> HResult<ComPtr<IDXGIFactory>> {
-        // currently unused, but will potentially be required when the docking feature is finalized
+        // currently unused, but will potentially be required when the docking feature
+        // is finalized
         device
             .cast::<IDXGIDevice>()
             .map_err(|e| NonZeroI32::new_unchecked(e))
@@ -226,27 +228,19 @@ impl Renderer {
         let mut vertex_offset = 0;
         let mut index_offset = 0;
         let mut last_tex = TextureId::from(FONT_TEX_ID);
-        self.context
-            .PSSetShaderResources(0, 1, &self.font_resource_view.as_raw());
+        self.context.PSSetShaderResources(0, 1, &self.font_resource_view.as_raw());
         for draw_list in draw_data.draw_lists() {
             for cmd in draw_list.commands() {
                 match cmd {
                     DrawCmd::Elements {
                         count,
-                        cmd_params:
-                            DrawCmdParams {
-                                clip_rect,
-                                texture_id,
-                                ..
-                            },
+                        cmd_params: DrawCmdParams { clip_rect, texture_id, .. },
                     } => {
                         if texture_id != last_tex {
                             let texture = if texture_id.id() == FONT_TEX_ID {
                                 &self.font_resource_view
                             } else {
-                                self.textures
-                                    .get(texture_id)
-                                    .ok_or(DXGI_ERROR_INVALID_CALL)?
+                                self.textures.get(texture_id).ok_or(DXGI_ERROR_INVALID_CALL)?
                             };
                             self.context.PSSetShaderResources(0, 1, &texture.as_raw());
                             last_tex = texture_id;
@@ -265,11 +259,11 @@ impl Renderer {
                             vertex_offset as i32,
                         );
                         index_offset += count;
-                    }
+                    },
                     DrawCmd::ResetRenderState => self.setup_render_state(draw_data),
                     DrawCmd::RawCallback { callback, raw_cmd } => {
                         callback(draw_list.raw(), raw_cmd)
-                    }
+                    },
                 }
             }
             vertex_offset += draw_list.vtx_buffer().len();
@@ -384,9 +378,8 @@ impl Renderer {
             idx_resource.pData.cast::<DrawIdx>(),
             draw_data.total_idx_count as usize,
         );
-        for (vbuf, ibuf) in draw_data
-            .draw_lists()
-            .map(|draw_list| (draw_list.vtx_buffer(), draw_list.idx_buffer()))
+        for (vbuf, ibuf) in
+            draw_data.draw_lists().map(|draw_list| (draw_list.vtx_buffer(), draw_list.idx_buffer()))
         {
             vtx_dst[..vbuf.len()].copy_from_slice(vbuf);
             idx_dst[..ibuf.len()].copy_from_slice(ibuf);
@@ -419,8 +412,7 @@ impl Renderer {
             [(r + l) / (l - r), (t + b) / (b - t), 0.5, 1.0],
         ];
         *mapped_resource.pData.cast::<VertexConstantBuffer>() = VertexConstantBuffer { mvp };
-        self.context
-            .Unmap(com_ref_cast(&self.constant_buffer).as_raw(), 0);
+        self.context.Unmap(com_ref_cast(&self.constant_buffer).as_raw(), 0);
         Ok(())
     }
 
@@ -436,10 +428,7 @@ impl Renderer {
             MipLevels: 1,
             ArraySize: 1,
             Format: DXGI_FORMAT_R8G8B8A8_UNORM,
-            SampleDesc: DXGI_SAMPLE_DESC {
-                Count: 1,
-                Quality: 0,
-            },
+            SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
             Usage: D3D11_USAGE_DEFAULT,
             BindFlags: D3D11_BIND_SHADER_RESOURCE,
             CPUAccessFlags: 0,
@@ -458,10 +447,7 @@ impl Renderer {
             ViewDimension: D3D11_SRV_DIMENSION_TEXTURE2D,
             u: mem::zeroed(),
         };
-        *desc.u.Texture2D_mut() = D3D11_TEX2D_SRV {
-            MostDetailedMip: 0,
-            MipLevels: 1,
-        };
+        *desc.u.Texture2D_mut() = D3D11_TEX2D_SRV { MostDetailedMip: 0, MipLevels: 1 };
         let font_texture_view = com_ptr_from_fn(|font_texture_view| {
             device.CreateShaderResourceView(
                 com_ref_cast(&texture).as_raw(),
@@ -491,11 +477,8 @@ impl Renderer {
 
     unsafe fn create_vertex_shader(
         device: &ComPtr<ID3D11Device>,
-    ) -> HResult<(
-        ComPtr<ID3D11VertexShader>,
-        ComPtr<ID3D11InputLayout>,
-        ComPtr<ID3D11Buffer>,
-    )> {
+    ) -> HResult<(ComPtr<ID3D11VertexShader>, ComPtr<ID3D11InputLayout>, ComPtr<ID3D11Buffer>)>
+    {
         const VERTEX_SHADER: &[u8] =
             include_bytes!(concat!(env!("OUT_DIR"), "/vertex_shader.vs_4_0"));
         let vs_shader = com_ptr_from_fn(|vs_shader| {
@@ -674,9 +657,7 @@ type OptComPtr<T> = Option<ComPtr<T>>;
 
 #[inline]
 fn opt_com_ptr_as_raw<T>(ptr: &OptComPtr<T>) -> *mut T {
-    ptr.as_ref()
-        .map(ComPtr::as_raw)
-        .unwrap_or_else(ptr::null_mut)
+    ptr.as_ref().map(ComPtr::as_raw).unwrap_or_else(ptr::null_mut)
 }
 
 struct StateBackup<'ctx> {

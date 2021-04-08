@@ -74,8 +74,5 @@ unsafe fn report_err(err: *const ID3DBlob) -> ! {
         })
         .map(ToOwned::to_owned);
     err.as_ref().map(|err| err.Release());
-    panic!(
-        "Failed to compile shader: {}",
-        err_msg.unwrap_or_else(|| String::from("Unknown error"))
-    )
+    panic!("Failed to compile shader: {}", err_msg.unwrap_or_else(|| String::from("Unknown error")))
 }

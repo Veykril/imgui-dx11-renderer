@@ -31,27 +31,17 @@ const WINDOW_HEIGHT: f64 = 760.0;
 
 unsafe fn create_device(
     hwnd: HWND,
-) -> Option<(
-    ComPtr<IDXGISwapChain>,
-    ComPtr<ID3D11Device>,
-    ComPtr<ID3D11DeviceContext>,
-)> {
+) -> Option<(ComPtr<IDXGISwapChain>, ComPtr<ID3D11Device>, ComPtr<ID3D11DeviceContext>)> {
     let sc_desc = DXGI_SWAP_CHAIN_DESC {
         BufferDesc: DXGI_MODE_DESC {
             Width: 0,
             Height: 0,
-            RefreshRate: DXGI_RATIONAL {
-                Numerator: 60,
-                Denominator: 1,
-            },
+            RefreshRate: DXGI_RATIONAL { Numerator: 60, Denominator: 1 },
             Format: DXGI_FORMAT_R8G8B8A8_UNORM,
             ScanlineOrdering: 0,
             Scaling: 0,
         },
-        SampleDesc: DXGI_SAMPLE_DESC {
-            Count: 1,
-            Quality: 0,
-        },
+        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
         BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
         BufferCount: 3,
         OutputWindow: hwnd,
@@ -83,11 +73,7 @@ unsafe fn create_device(
     {
         None
     } else {
-        Some((
-            ComPtr::from_raw(swapchain),
-            ComPtr::from_raw(device),
-            ComPtr::from_raw(context),
-        ))
+        Some((ComPtr::from_raw(swapchain), ComPtr::from_raw(device), ComPtr::from_raw(context)))
     }
 }
 
@@ -111,10 +97,7 @@ fn main() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title("imgui_dx11_renderer winit example")
-        .with_inner_size(LogicalSize {
-            width: WINDOW_WIDTH,
-            height: WINDOW_HEIGHT,
-        })
+        .with_inner_size(LogicalSize { width: WINDOW_WIDTH, height: WINDOW_HEIGHT })
         .build(&event_loop)
         .unwrap();
     let hwnd = if let RawWindowHandle::Windows(handle) = window.raw_window_handle() {
@@ -133,10 +116,7 @@ fn main() {
     let hidpi_factor = platform.hidpi_factor();
     let font_size = (13.0 * hidpi_factor) as f32;
     imgui.fonts().add_font(&[FontSource::DefaultFontData {
-        config: Some(FontConfig {
-            size_pixels: font_size,
-            ..FontConfig::default()
-        }),
+        config: Some(FontConfig { size_pixels: font_size, ..FontConfig::default() }),
     }]);
 
     imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
@@ -152,14 +132,12 @@ fn main() {
             let now = Instant::now();
             imgui.io_mut().update_delta_time(now - last_frame);
             last_frame = now;
-        }
+        },
         Event::MainEventsCleared => {
             let io = imgui.io_mut();
-            platform
-                .prepare_frame(io, &window)
-                .expect("Failed to start frame");
+            platform.prepare_frame(io, &window).expect("Failed to start frame");
             window.request_redraw();
-        }
+        },
         Event::RedrawRequested(_) => {
             unsafe {
                 context.OMSetRenderTargets(1, &main_rtv.as_raw(), ptr::null_mut());
@@ -173,11 +151,7 @@ fn main() {
                     ui.text(im_str!("This...is...imgui-rs!"));
                     ui.separator();
                     let mouse_pos = ui.io().mouse_pos;
-                    ui.text(im_str!(
-                        "Mouse Position: ({:.1},{:.1})",
-                        mouse_pos[0],
-                        mouse_pos[1]
-                    ));
+                    ui.text(im_str!("Mouse Position: ({:.1},{:.1})", mouse_pos[0], mouse_pos[1]));
                 });
             ui.show_demo_window(&mut true);
             platform.prepare_render(&ui, &window);
@@ -185,11 +159,10 @@ fn main() {
             unsafe {
                 swapchain.Present(1, 0);
             }
-        }
-        Event::WindowEvent {
-            event: WindowEvent::CloseRequested,
-            ..
-        } => *control_flow = winit::event_loop::ControlFlow::Exit,
+        },
+        Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
+            *control_flow = winit::event_loop::ControlFlow::Exit
+        },
         Event::WindowEvent {
             event: WindowEvent::Resized(winit::dpi::PhysicalSize { height, width }),
             ..
@@ -202,6 +175,6 @@ fn main() {
         Event::LoopDestroyed => (),
         event => {
             platform.handle_event(imgui.io_mut(), &window, &event);
-        }
+        },
     });
 }
