@@ -11,25 +11,34 @@ readme = "README.md"
 categories = ["gui", "rendering"]
 
 [dependencies]
-winapi = { version = "0.3", features = [
-    "d3d11",
-    "dxgitype",
-    "dxgiformat",
-    "dxgi",
-    "minwindef",
-    "winerror",
+windows = { version = "0.36", features = [
+    "alloc",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Direct3D_Fxc"
 ] }
-wio = "0.2"
-imgui = "0.7"
+imgui = "0.8"
 
 [build-dependencies]
 winapi = { version = "0.3", features = ["d3dcompiler", "d3dcommon"] }
 
 [dev-dependencies]
-imgui = "0.7"
-imgui-winit-support = "0.7"
-winit = "0.24"
-raw-window-handle = "0.3"
+imgui = { version = "0.8", features = [] }
+imgui-winit-support = { version = "0.8", features = ["winit-26"] }
+winit = "0.26"
+windows = { version = "0.36", features = [
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging"
+] }
 
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"

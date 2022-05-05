@@ -9,12 +9,12 @@ DirectX 11 renderer for [imgui-rs](https://github.com/Gekkio/imgui-rs).
 
 This crate makes use of the ComPtr wrapper of the [wio](https://crates.io/crates/wio) crate.
 You have to wrap your device pointer in one to pass it to the renderer should you not use these internally already,
-tho care must be taken in regards of the reference count.
+tho care must be taken in regard to the reference count.
 
 ```rust
-let device: ComPtr<ID3D11Device> = ...;
+let device: ID3D11Device = ...;
 let imgui: imgui::Context = ...;
-let mut renderer = imgui_dx11_renderer::Renderer::new(&mut imgui, device.clone()).expect("imgui dx11 renderer creation failed");
+let mut renderer = imgui_dx11_renderer::Renderer::new(&mut imgui, &device).expect("imgui dx11 renderer creation failed");
 
 // rendering loop
 
@@ -27,7 +27,7 @@ let ui = imgui.frame();
 renderer.render(ui.render()).expect("imgui rendering failed");
 ```
 
-The renderer backs up and reapplies the majority of the d3d11 renderering state when invoked.
+The renderer backs up and reapplies the majority of the d3d11 rendering state when invoked.
 
 ## Documentation
 
