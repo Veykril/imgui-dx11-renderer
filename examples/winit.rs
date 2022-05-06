@@ -74,7 +74,6 @@ fn create_render_target(swapchain: &IDXGISwapChain, device: &ID3D11Device) -> Re
     }
 }
 
-
 fn main() -> Result<()> {
     let event_loop = EventLoop::new();
     let mut device_ctx = None;

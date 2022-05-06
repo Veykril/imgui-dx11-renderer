@@ -21,7 +21,11 @@ windows = { version = "0.36", features = [
 imgui = "0.8"
 
 [build-dependencies]
-winapi = { version = "0.3", features = ["d3dcompiler", "d3dcommon"] }
+windows = { version = "0.36", features = [
+    "alloc",
+    "Win32_Graphics_Direct3D_Fxc",
+    "Win32_Foundation"
+] }
 
 [dev-dependencies]
 imgui = { version = "0.8", features = [] }
