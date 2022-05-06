@@ -7,8 +7,8 @@ use windows::core::Interface;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
-use windows::Win32::Graphics::Dxgi::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
+use windows::Win32::Graphics::Dxgi::*;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoop;
@@ -32,7 +32,20 @@ fn create_device_with_type(drive_type: D3D_DRIVER_TYPE) -> Result<ID3D11Device> 
     let mut device = None;
     let feature_levels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_10_0];
     let mut fl = D3D_FEATURE_LEVEL_11_1;
-    unsafe { D3D11CreateDevice(None, drive_type, HINSTANCE::default(), flags, &feature_levels, D3D11_SDK_VERSION, &mut device, &mut fl, &mut None).map(|()| device.unwrap()) }
+    unsafe {
+        D3D11CreateDevice(
+            None,
+            drive_type,
+            HINSTANCE::default(),
+            flags,
+            &feature_levels,
+            D3D11_SDK_VERSION,
+            &mut device,
+            &mut fl,
+            &mut None,
+        )
+        .map(|()| device.unwrap())
+    }
 }
 
 fn create_device() -> Result<ID3D11Device> {
@@ -67,7 +80,10 @@ fn get_dxgi_factory(device: &ID3D11Device) -> Result<IDXGIFactory2> {
     unsafe { dxdevice.GetAdapter()?.GetParent() }
 }
 
-fn create_render_target(swapchain: &IDXGISwapChain, device: &ID3D11Device) -> Result<ID3D11RenderTargetView> {
+fn create_render_target(
+    swapchain: &IDXGISwapChain,
+    device: &ID3D11Device,
+) -> Result<ID3D11RenderTargetView> {
     unsafe {
         let backbuffer: ID3D11Resource = swapchain.GetBuffer(0)?;
         device.CreateRenderTargetView(&backbuffer, 0 as _)
@@ -85,7 +101,9 @@ fn main() -> Result<()> {
 
     let device = create_device()?;
     let swapchain = unsafe { create_swapchain(&device, transmute(window.hwnd()))? };
-    unsafe { device.GetImmediateContext(&mut device_ctx); }
+    unsafe {
+        device.GetImmediateContext(&mut device_ctx);
+    }
     let mut target = Some(create_render_target(&swapchain, &device)?);
 
     let mut imgui = Context::create();
@@ -107,12 +125,12 @@ fn main() -> Result<()> {
             let now = Instant::now();
             imgui.io_mut().update_delta_time(now - last_frame);
             last_frame = now;
-        }
+        },
         Event::MainEventsCleared => {
             let io = imgui.io_mut();
             platform.prepare_frame(io, &window).expect("Failed to start frame");
             window.request_redraw();
-        }
+        },
         Event::RedrawRequested(_) => {
             unsafe {
                 if let Some(ref context) = device_ctx {
@@ -137,18 +155,23 @@ fn main() -> Result<()> {
             unsafe {
                 swapchain.Present(1, 0).unwrap();
             }
-        }
+        },
         Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
             *control_flow = winit::event_loop::ControlFlow::Exit
-        }
-        Event::WindowEvent { event: WindowEvent::Resized(winit::dpi::PhysicalSize { height, width }), .. } => {
+        },
+        Event::WindowEvent {
+            event: WindowEvent::Resized(winit::dpi::PhysicalSize { height, width }),
+            ..
+        } => {
             target = None;
-            unsafe { swapchain.ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0).unwrap(); }
+            unsafe {
+                swapchain.ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0).unwrap();
+            }
             let rtv = create_render_target(&swapchain, &device).unwrap();
             target = Some(rtv);
             platform.handle_event(imgui.io_mut(), &window, &event);
-        }
+        },
         Event::LoopDestroyed => (),
-        event => platform.handle_event(imgui.io_mut(), &window, &event)
+        event => platform.handle_event(imgui.io_mut(), &window, &event),
     })
 }

@@ -5,19 +5,19 @@
 
 use alloc::vec;
 use alloc::vec::Vec;
-use core::{mem, slice};
 use core::ptr::null;
+use core::{mem, slice};
 
+use imgui::internal::RawWrapper;
 use imgui::{
     BackendFlags, DrawCmd, DrawCmdParams, DrawData, DrawIdx, DrawVert, TextureId, Textures,
 };
-use imgui::internal::RawWrapper;
 use windows::core::*;
 use windows::Win32::Foundation::RECT;
 use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
-use windows::Win32::Graphics::Dxgi::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
+use windows::Win32::Graphics::Dxgi::*;
 
 const FONT_TEX_ID: usize = !0;
 
@@ -59,7 +59,8 @@ impl Renderer {
     pub unsafe fn new(im_ctx: &mut imgui::Context, device: &ID3D11Device) -> Result<Self> {
         let (vertex_shader, input_layout, constant_buffer) = Self::create_vertex_shader(device)?;
         let pixel_shader = Self::create_pixel_shader(device)?;
-        let (blend_state, rasterizer_state, depth_stencil_state) = Self::create_device_objects(device)?;
+        let (blend_state, rasterizer_state, depth_stencil_state) =
+            Self::create_device_objects(device)?;
         let (font_resource_view, font_sampler) = Self::create_font_texture(im_ctx.fonts(), device)?;
         let vertex_buffer = Self::create_vertex_buffer(device, 0)?;
         let index_buffer = Self::create_index_buffer(device, 0)?;
@@ -116,10 +117,12 @@ impl Renderer {
         }
         unsafe {
             if self.vertex_buffer.len() < draw_data.total_vtx_count as usize {
-                self.vertex_buffer = Self::create_vertex_buffer(&self.device, draw_data.total_vtx_count as usize)?;
+                self.vertex_buffer =
+                    Self::create_vertex_buffer(&self.device, draw_data.total_vtx_count as usize)?;
             }
             if self.index_buffer.len() < draw_data.total_idx_count as usize {
-                self.index_buffer = Self::create_index_buffer(&self.device, draw_data.total_idx_count as usize)?;
+                self.index_buffer =
+                    Self::create_index_buffer(&self.device, draw_data.total_idx_count as usize)?;
             }
             let _state_guard = StateBackup::backup(Some(self.context.clone()));
 
@@ -142,12 +145,18 @@ impl Renderer {
         for draw_list in draw_data.draw_lists() {
             for cmd in draw_list.commands() {
                 match cmd {
-                    DrawCmd::Elements { count, cmd_params: DrawCmdParams { clip_rect, texture_id, .. }, } => {
+                    DrawCmd::Elements {
+                        count,
+                        cmd_params: DrawCmdParams { clip_rect, texture_id, .. },
+                    } => {
                         if texture_id != last_tex {
                             let texture = if texture_id.id() == FONT_TEX_ID {
                                 self.font_resource_view.clone()
                             } else {
-                                self.textures.get(texture_id).ok_or(DXGI_ERROR_INVALID_CALL)?.clone()
+                                self.textures
+                                    .get(texture_id)
+                                    .ok_or(DXGI_ERROR_INVALID_CALL)?
+                                    .clone()
                             };
                             context.PSSetShaderResources(0, &[Some(texture)]);
                             last_tex = texture_id;
@@ -160,11 +169,17 @@ impl Renderer {
                             bottom: ((clip_rect[3] - clip_off[1]) * clip_scale[1]) as i32,
                         };
                         context.RSSetScissorRects(&[r]);
-                        context.DrawIndexed(count as u32, index_offset as u32, vertex_offset as i32);
+                        context.DrawIndexed(
+                            count as u32,
+                            index_offset as u32,
+                            vertex_offset as i32,
+                        );
                         index_offset += count;
-                    }
+                    },
                     DrawCmd::ResetRenderState => self.setup_render_state(draw_data),
-                    DrawCmd::RawCallback { callback, raw_cmd } => callback(draw_list.raw(), raw_cmd)
+                    DrawCmd::RawCallback { callback, raw_cmd } => {
+                        callback(draw_list.raw(), raw_cmd)
+                    },
                 }
             }
             vertex_offset += draw_list.vtx_buffer().len();
@@ -182,7 +197,11 @@ impl Renderer {
             MinDepth: 0.0,
             MaxDepth: 1.0,
         };
-        let draw_fmt = if mem::size_of::<DrawIdx>() == 2 { DXGI_FORMAT_R16_UINT } else { DXGI_FORMAT_R32_UINT };
+        let draw_fmt = if mem::size_of::<DrawIdx>() == 2 {
+            DXGI_FORMAT_R16_UINT
+        } else {
+            DXGI_FORMAT_R32_UINT
+        };
         let stride = mem::size_of::<DrawVert>() as u32;
         let blend_factor = 0.0;
 
@@ -215,8 +234,7 @@ impl Renderer {
             StructureByteStride: 0,
         };
 
-        device.CreateBuffer(&desc, null())
-            .map(|buf| { Buffer(buf, len) })
+        device.CreateBuffer(&desc, null()).map(|buf| Buffer(buf, len))
     }
 
     unsafe fn create_index_buffer(device: &ID3D11Device, idx_count: usize) -> Result<Buffer> {
@@ -230,13 +248,14 @@ impl Renderer {
             StructureByteStride: 0,
         };
 
-        device.CreateBuffer(&desc, null())
-            .map(|buf| { Buffer(buf, len) })
+        device.CreateBuffer(&desc, null()).map(|buf| Buffer(buf, len))
     }
 
     unsafe fn write_buffers(&self, draw_data: &DrawData) -> Result<()> {
-        let vtx_resource: D3D11_MAPPED_SUBRESOURCE = self.context.Map(self.vertex_buffer.get_buf(), 0, D3D11_MAP_WRITE_DISCARD, 0)?;
-        let idx_resource: D3D11_MAPPED_SUBRESOURCE = self.context.Map(self.index_buffer.get_buf(), 0, D3D11_MAP_WRITE_DISCARD, 0)?;
+        let vtx_resource: D3D11_MAPPED_SUBRESOURCE =
+            self.context.Map(self.vertex_buffer.get_buf(), 0, D3D11_MAP_WRITE_DISCARD, 0)?;
+        let idx_resource: D3D11_MAPPED_SUBRESOURCE =
+            self.context.Map(self.index_buffer.get_buf(), 0, D3D11_MAP_WRITE_DISCARD, 0)?;
 
         let mut vtx_dst = slice::from_raw_parts_mut(
             vtx_resource.pData.cast::<DrawVert>(),
@@ -247,7 +266,9 @@ impl Renderer {
             draw_data.total_idx_count as usize,
         );
 
-        for (vbuf, ibuf) in draw_data.draw_lists().map(|draw_list| (draw_list.vtx_buffer(), draw_list.idx_buffer())) {
+        for (vbuf, ibuf) in
+            draw_data.draw_lists().map(|draw_list| (draw_list.vtx_buffer(), draw_list.idx_buffer()))
+        {
             vtx_dst[..vbuf.len()].copy_from_slice(vbuf);
             idx_dst[..ibuf.len()].copy_from_slice(ibuf);
             vtx_dst = &mut vtx_dst[vbuf.len()..];
@@ -257,7 +278,8 @@ impl Renderer {
         self.context.Unmap(self.vertex_buffer.get_buf(), 0);
         self.context.Unmap(self.index_buffer.get_buf(), 0);
 
-        let mapped_resource: D3D11_MAPPED_SUBRESOURCE = self.context.Map(&self.constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0)?;
+        let mapped_resource: D3D11_MAPPED_SUBRESOURCE =
+            self.context.Map(&self.constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0)?;
         let l = draw_data.display_pos[0];
         let r = draw_data.display_pos[0] + draw_data.display_size[0];
         let t = draw_data.display_pos[1];
@@ -274,7 +296,10 @@ impl Renderer {
         Ok(())
     }
 
-    unsafe fn create_font_texture(mut fonts: imgui::FontAtlasRefMut<'_>, device: &ID3D11Device) -> Result<(ID3D11ShaderResourceView, ID3D11SamplerState)> {
+    unsafe fn create_font_texture(
+        mut fonts: imgui::FontAtlasRefMut<'_>,
+        device: &ID3D11Device,
+    ) -> Result<(ID3D11ShaderResourceView, ID3D11SamplerState)> {
         let fa_tex = fonts.build_rgba32_texture();
 
         let desc = D3D11_TEXTURE2D_DESC {
@@ -321,8 +346,11 @@ impl Renderer {
         Ok((font_texture_view, font_sampler))
     }
 
-    unsafe fn create_vertex_shader(device: &ID3D11Device) -> Result<(ID3D11VertexShader, ID3D11InputLayout, ID3D11Buffer)> {
-        const VERTEX_SHADER: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/vertex_shader.vs_4_0"));
+    unsafe fn create_vertex_shader(
+        device: &ID3D11Device,
+    ) -> Result<(ID3D11VertexShader, ID3D11InputLayout, ID3D11Buffer)> {
+        const VERTEX_SHADER: &[u8] =
+            include_bytes!(concat!(env!("OUT_DIR"), "/vertex_shader.vs_4_0"));
         let vs_shader = device.CreateVertexShader(VERTEX_SHADER, None)?;
 
         let local_layout = [
@@ -363,18 +391,21 @@ impl Renderer {
             BindFlags: D3D11_BIND_CONSTANT_BUFFER.0,
             CPUAccessFlags: D3D11_CPU_ACCESS_WRITE.0,
             MiscFlags: 0,
-            StructureByteStride: 0
+            StructureByteStride: 0,
         };
         let vertex_constant_buffer = device.CreateBuffer(&desc, null())?;
         Ok((vs_shader, input_layout, vertex_constant_buffer))
     }
 
     unsafe fn create_pixel_shader(device: &ID3D11Device) -> Result<ID3D11PixelShader> {
-        const PIXEL_SHADER: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/pixel_shader.ps_4_0"));
+        const PIXEL_SHADER: &[u8] =
+            include_bytes!(concat!(env!("OUT_DIR"), "/pixel_shader.ps_4_0"));
         device.CreatePixelShader(PIXEL_SHADER, None)
     }
 
-    unsafe fn create_device_objects(device: &ID3D11Device) -> Result<(ID3D11BlendState, ID3D11RasterizerState, ID3D11DepthStencilState)> {
+    unsafe fn create_device_objects(
+        device: &ID3D11Device,
+    ) -> Result<(ID3D11BlendState, ID3D11RasterizerState, ID3D11DepthStencilState)> {
         let desc = D3D11_BLEND_DESC {
             AlphaToCoverageEnable: false.into(),
             IndependentBlendEnable: true.into(),
@@ -473,7 +504,11 @@ impl StateBackup {
         ctx.RSGetScissorRects(&mut 16, &mut result.scissor_rects);
         ctx.RSGetViewports(&mut 16, &mut result.viewports);
         ctx.RSGetState(&mut result.rasterizer_state);
-        ctx.OMGetBlendState(&mut result.blend_state, &mut result.blend_factor, &mut result.sample_mask);
+        ctx.OMGetBlendState(
+            &mut result.blend_state,
+            &mut result.blend_factor,
+            &mut result.sample_mask,
+        );
         ctx.OMGetDepthStencilState(&mut result.depth_stencil_state, &mut result.stencil_ref);
         ctx.PSGetShaderResources(0, &mut result.shader_resource);
         ctx.PSGetSamplers(0, &mut result.sampler);
@@ -482,8 +517,18 @@ impl StateBackup {
         ctx.VSGetConstantBuffers(0, &mut result.constant_buffer);
         ctx.GSGetShader(&mut result.gs_shader, &mut result.gs_instances, &mut 256);
         ctx.IAGetPrimitiveTopology(&mut result.topology);
-        ctx.IAGetIndexBuffer(&mut result.index_buffer, &mut result.index_buffer_format, &mut result.index_buffer_offset);
-        ctx.IAGetVertexBuffers(0, 1, &mut result.vertex_buffer, &mut result.vertex_buffer_stride, &mut result.vertex_buffer_offset);
+        ctx.IAGetIndexBuffer(
+            &mut result.index_buffer,
+            &mut result.index_buffer_format,
+            &mut result.index_buffer_offset,
+        );
+        ctx.IAGetVertexBuffers(
+            0,
+            1,
+            &mut result.vertex_buffer,
+            &mut result.vertex_buffer_stride,
+            &mut result.vertex_buffer_offset,
+        );
         ctx.IAGetInputLayout(&mut result.input_layout);
         result.context = context;
         result
@@ -491,8 +536,10 @@ impl StateBackup {
     pub fn restore(mut self) {
         unsafe {
             let ctx = self.context.as_ref().unwrap();
-            let inst = if self.ps_instances.is_some() { vec![self.ps_instances.take()] } else { vec![] };
-            let vinst = if self.vs_instances.is_some() { vec![self.vs_instances.take()] } else { vec![] };
+            let inst =
+                if self.ps_instances.is_some() { vec![self.ps_instances.take()] } else { vec![] };
+            let vinst =
+                if self.vs_instances.is_some() { vec![self.vs_instances.take()] } else { vec![] };
 
             ctx.RSSetScissorRects(&[self.scissor_rects]);
             ctx.RSSetViewports(&[self.viewports]);
@@ -506,8 +553,18 @@ impl StateBackup {
             ctx.VSSetConstantBuffers(0, &self.constant_buffer);
             ctx.GSSetShader(&self.gs_shader, &[]);
             ctx.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            ctx.IASetIndexBuffer(&self.index_buffer, self.index_buffer_format, self.index_buffer_offset);
-            ctx.IASetVertexBuffers(0, 1, &self.vertex_buffer, &self.vertex_buffer_stride, &self.vertex_buffer_offset);
+            ctx.IASetIndexBuffer(
+                &self.index_buffer,
+                self.index_buffer_format,
+                self.index_buffer_offset,
+            );
+            ctx.IASetVertexBuffers(
+                0,
+                1,
+                &self.vertex_buffer,
+                &self.vertex_buffer_stride,
+                &self.vertex_buffer_offset,
+            );
             ctx.IASetInputLayout(&self.input_layout);
         }
     }
