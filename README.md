@@ -7,10 +7,6 @@ DirectX 11 renderer for [imgui-rs](https://github.com/Gekkio/imgui-rs).
 
 ## Usage
 
-This crate makes use of the ComPtr wrapper of the [wio](https://crates.io/crates/wio) crate.
-You have to wrap your device pointer in one to pass it to the renderer should you not use these internally already,
-tho care must be taken in regard to the reference count.
-
 ```rust
 let device: ID3D11Device = ...;
 let imgui: imgui::Context = ...;

@@ -54,9 +54,9 @@ fn create_swapchain(device: &ID3D11Device, window: HWND) -> Result<IDXGISwapChai
         BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
         BufferCount: 3,
         OutputWindow: window,
-        Windowed: BOOL::from(true),
+        Windowed: true.into(),
         SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
-        Flags: 2,
+        Flags: DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.0 as u32,
     };
 
     unsafe { factory.CreateSwapChain(device, &sc_desc) }
