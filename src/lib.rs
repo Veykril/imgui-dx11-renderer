@@ -1,9 +1,12 @@
 #![cfg(windows)]
 #![deny(missing_docs)]
+#![no_std]
 //! This crate offers a DirectX 11 renderer for the [imgui-rs](https://docs.rs/imgui/*/imgui/) rust bindings.
 
-use std::{mem, slice};
-use std::ptr::null;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::{mem, slice};
+use core::ptr::null;
 
 use imgui::{
     BackendFlags, DrawCmd, DrawCmdParams, DrawData, DrawIdx, DrawVert, TextureId, Textures,
@@ -58,15 +61,15 @@ impl Renderer {
         let pixel_shader = Self::create_pixel_shader(device)?;
         let (blend_state, rasterizer_state, depth_stencil_state) = Self::create_device_objects(device)?;
         let (font_resource_view, font_sampler) = Self::create_font_texture(im_ctx.fonts(), device)?;
-        let vertex_buffer = Self::create_vertex_buffer(device, 5000)?;
-        let index_buffer = Self::create_index_buffer(device, 10000)?;
+        let vertex_buffer = Self::create_vertex_buffer(device, 0)?;
+        let index_buffer = Self::create_index_buffer(device, 0)?;
 
         let mut context = None;
         device.GetImmediateContext(&mut context);
 
         im_ctx.io_mut().backend_flags |= BackendFlags::RENDERER_HAS_VTX_OFFSET;
-        let renderer_name = concat!("imgui_dx11_renderer@", env!("CARGO_PKG_VERSION")).to_string();
-        im_ctx.set_renderer_name(Some(renderer_name));
+        let renderer_name = concat!("imgui_dx11_renderer@", env!("CARGO_PKG_VERSION"));
+        im_ctx.set_renderer_name(Some(renderer_name.parse().unwrap()));
 
         Ok(Renderer {
             device: device.clone(),
@@ -185,7 +188,7 @@ impl Renderer {
 
         ctx.RSSetViewports(&[vp]);
         ctx.IASetInputLayout(&self.input_layout);
-        ctx.IASetVertexBuffers(0, 1, &self.vertex_buffer.0, &stride, &0);
+        ctx.IASetVertexBuffers(0, 1, &Some(self.vertex_buffer.get_buf().clone()), &stride, &0);
         ctx.IASetIndexBuffer(self.index_buffer.get_buf(), draw_fmt, 0);
         ctx.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         ctx.VSSetShader(&self.vertex_shader, &[]);
@@ -206,14 +209,14 @@ impl Renderer {
         let desc = D3D11_BUFFER_DESC {
             ByteWidth: (len * mem::size_of::<DrawVert>()) as u32,
             Usage: D3D11_USAGE_DYNAMIC,
-            BindFlags: 1,
-            CPUAccessFlags: 65536,
+            BindFlags: D3D11_BIND_VERTEX_BUFFER.0,
+            CPUAccessFlags: D3D11_CPU_ACCESS_WRITE.0,
             MiscFlags: 0,
             StructureByteStride: 0,
         };
 
         device.CreateBuffer(&desc, null())
-            .map_or(Ok(Buffer(None, len)), |buf| { Ok(Buffer(Some(buf), len)) })
+            .map(|buf| { Buffer(buf, len) })
     }
 
     unsafe fn create_index_buffer(device: &ID3D11Device, idx_count: usize) -> Result<Buffer> {
@@ -221,36 +224,34 @@ impl Renderer {
         let desc = D3D11_BUFFER_DESC {
             ByteWidth: (len * mem::size_of::<DrawIdx>()) as u32,
             Usage: D3D11_USAGE_DYNAMIC,
-            BindFlags: 2,
-            CPUAccessFlags: 65536,
+            BindFlags: D3D11_BIND_INDEX_BUFFER.0,
+            CPUAccessFlags: D3D11_CPU_ACCESS_WRITE.0,
             MiscFlags: 0,
             StructureByteStride: 0,
         };
 
         device.CreateBuffer(&desc, null())
-            .map_or(Ok(Buffer(None, len)), |buf| { Ok(Buffer(Some(buf), len)) })
+            .map(|buf| { Buffer(buf, len) })
     }
 
     unsafe fn write_buffers(&self, draw_data: &DrawData) -> Result<()> {
         let vtx_resource: D3D11_MAPPED_SUBRESOURCE = self.context.Map(self.vertex_buffer.get_buf(), 0, D3D11_MAP_WRITE_DISCARD, 0)?;
         let idx_resource: D3D11_MAPPED_SUBRESOURCE = self.context.Map(self.index_buffer.get_buf(), 0, D3D11_MAP_WRITE_DISCARD, 0)?;
 
-        let vtx_dst = slice::from_raw_parts_mut(
+        let mut vtx_dst = slice::from_raw_parts_mut(
             vtx_resource.pData.cast::<DrawVert>(),
             draw_data.total_vtx_count as usize,
         );
-        let idx_dst = slice::from_raw_parts_mut(
+        let mut idx_dst = slice::from_raw_parts_mut(
             idx_resource.pData.cast::<DrawIdx>(),
             draw_data.total_idx_count as usize,
         );
 
-        let mut vp = 0;
-        let mut ip = 0;
         for (vbuf, ibuf) in draw_data.draw_lists().map(|draw_list| (draw_list.vtx_buffer(), draw_list.idx_buffer())) {
-            vtx_dst[vp..vp + vbuf.len()].copy_from_slice(vbuf);
-            idx_dst[ip..ip + ibuf.len()].copy_from_slice(ibuf);
-            vp += vbuf.len();
-            ip += ibuf.len();
+            vtx_dst[..vbuf.len()].copy_from_slice(vbuf);
+            idx_dst[..ibuf.len()].copy_from_slice(ibuf);
+            vtx_dst = &mut vtx_dst[vbuf.len()..];
+            idx_dst = &mut idx_dst[ibuf.len()..];
         }
 
         self.context.Unmap(self.vertex_buffer.get_buf(), 0);
@@ -285,8 +286,7 @@ impl Renderer {
             SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
             Usage: D3D11_USAGE_DEFAULT,
             BindFlags: D3D11_BIND_SHADER_RESOURCE,
-            CPUAccessFlags: D3D11_CPU_ACCESS_FLAG(0),
-            MiscFlags: Default::default(),
+            ..Default::default()
         };
         let sub_resource = D3D11_SUBRESOURCE_DATA {
             pSysMem: fa_tex.data.as_ptr().cast(),
@@ -360,10 +360,10 @@ impl Renderer {
         let desc = D3D11_BUFFER_DESC {
             ByteWidth: mem::size_of::<VertexConstantBuffer>() as _,
             Usage: D3D11_USAGE_DYNAMIC,
-            BindFlags: 4,
-            CPUAccessFlags: 65536,
+            BindFlags: D3D11_BIND_CONSTANT_BUFFER.0,
+            CPUAccessFlags: D3D11_CPU_ACCESS_WRITE.0,
             MiscFlags: 0,
-            ..Default::default()
+            StructureByteStride: 0
         };
         let vertex_constant_buffer = device.CreateBuffer(&desc, null())?;
         Ok((vs_shader, input_layout, vertex_constant_buffer))
@@ -386,7 +386,7 @@ impl Renderer {
                 SrcBlendAlpha: D3D11_BLEND_ONE,
                 DestBlendAlpha: D3D11_BLEND_INV_SRC_ALPHA,
                 BlendOpAlpha: D3D11_BLEND_OP_ADD,
-                RenderTargetWriteMask: 15,
+                RenderTargetWriteMask: D3D11_COLOR_WRITE_ENABLE_ALL.0 as u8,
             }; 8],
         };
         let blend_state = device.CreateBlendState(&desc)?;
@@ -422,7 +422,7 @@ impl Renderer {
 }
 
 #[derive(Debug)]
-struct Buffer(pub Option<ID3D11Buffer>, usize);
+struct Buffer(ID3D11Buffer, usize);
 
 impl Buffer {
     #[inline]
@@ -431,7 +431,7 @@ impl Buffer {
     }
     #[inline]
     fn get_buf(&self) -> &ID3D11Buffer {
-        self.0.as_ref().unwrap()
+        &self.0
     }
 }
 
