@@ -1,6 +1,6 @@
 [package]
 name = "imgui-dx11-renderer"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Lukas Wirth <lukastw97@gmail.com>"]
 edition = "2018"
 description = "DirectX 11 renderer for the imgui crate"
@@ -16,7 +16,7 @@ windows = { version = "0.36", features = [
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",
-    "Win32_Foundation"
+    "Win32_Foundation",
 ] }
 imgui = "0.8"
 
@@ -24,7 +24,7 @@ imgui = "0.8"
 windows = { version = "0.36", features = [
     "alloc",
     "Win32_Graphics_Direct3D_Fxc",
-    "Win32_Foundation"
+    "Win32_Foundation",
 ] }
 
 [dev-dependencies]
@@ -36,7 +36,7 @@ windows = { version = "0.36", features = [
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",
-    "Win32_Foundation"
+    "Win32_Foundation",
 ] }
 
 [package.metadata.docs.rs]
