@@ -35,7 +35,6 @@ use windows::Win32::Graphics::Dxgi::Common::{
 };
 use windows::Win32::Graphics::Dxgi::DXGI_ERROR_INVALID_CALL;
 
-
 use imgui::internal::RawWrapper;
 use imgui::{
     BackendFlags, DrawCmd, DrawCmdParams, DrawData, DrawIdx, DrawVert, TextureId, Textures,

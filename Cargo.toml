@@ -1,8 +1,8 @@
 [package]
 name = "imgui-dx11-renderer"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Lukas Wirth <lukastw97@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "DirectX 11 renderer for the imgui crate"
 homepage = "https://github.com/Veykril/imgui-dx11-renderer"
 repository = "https://github.com/Veykril/imgui-dx11-renderer"
@@ -27,7 +27,7 @@ windows = { version = "0.43.0", features = [
 ] }
 
 [dev-dependencies]
-imgui = { version = "0.9.0", features = [] }
+imgui = { version = "0.9.0" }
 imgui-winit-support = { version = "0.9.0" }
 winit = "0.27.5"
 windows = { version = "0.43.0", features = [

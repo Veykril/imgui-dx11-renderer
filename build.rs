@@ -1,9 +1,9 @@
 use std::error::Error;
 use std::{env, fs, slice, str};
 
+use windows::s;
 use windows::Win32::Graphics::Direct3D::Fxc::D3DCompile;
 use windows::Win32::Graphics::Direct3D::ID3DBlob;
-use windows::s;
 
 fn main() -> Result<(), Box<dyn Error + 'static>> {
     static VERTEX_SHADER: &str = include_str!("src/vertex_shader.vs_4_0");
