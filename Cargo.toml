@@ -1,8 +1,8 @@
 [package]
 name = "imgui-dx11-renderer"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Lukas Wirth <lukastw97@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "DirectX 11 renderer for the imgui crate"
 homepage = "https://github.com/Veykril/imgui-dx11-renderer"
 repository = "https://github.com/Veykril/imgui-dx11-renderer"
@@ -11,27 +11,26 @@ readme = "README.md"
 categories = ["gui", "rendering"]
 
 [dependencies]
-windows = { version = "0.36", features = [
+windows = { version = "0.43.0", features = [
     "Win32_Graphics_Direct3D11",
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",
     "Win32_Foundation",
 ] }
-imgui = "0.8"
+imgui = "0.9.0"
 
 [build-dependencies]
-windows = { version = "0.36", features = [
-    "alloc",
+windows = { version = "0.43.0", features = [
     "Win32_Graphics_Direct3D_Fxc",
     "Win32_Foundation",
 ] }
 
 [dev-dependencies]
-imgui = { version = "0.8", features = [] }
-imgui-winit-support = { version = "0.8", features = ["winit-26"] }
-winit = "0.26"
-windows = { version = "0.36", features = [
+imgui = { version = "0.9.0" }
+imgui-winit-support = { version = "0.9.0" }
+winit = "0.27.5"
+windows = { version = "0.43.0", features = [
     "Win32_Graphics_Direct3D11",
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Dxgi",

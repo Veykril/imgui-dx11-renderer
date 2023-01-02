@@ -3,12 +3,25 @@ use std::time::Instant;
 
 use imgui::{Context, FontConfig, FontSource};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
+
 use windows::core::Interface;
-use windows::Win32::Foundation::*;
-use windows::Win32::Graphics::Direct3D::*;
-use windows::Win32::Graphics::Direct3D11::*;
-use windows::Win32::Graphics::Dxgi::Common::*;
-use windows::Win32::Graphics::Dxgi::*;
+use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Graphics::Direct3D::{
+    D3D_DRIVER_TYPE, D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_11_1,
+};
+use windows::Win32::Graphics::Direct3D11::{
+    D3D11CreateDevice, ID3D11Device, ID3D11RenderTargetView, ID3D11Resource,
+    D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_DEBUG, D3D11_SDK_VERSION,
+};
+use windows::Win32::Graphics::Dxgi::Common::{
+    DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, DXGI_MODE_DESC, DXGI_RATIONAL,
+    DXGI_SAMPLE_DESC,
+};
+use windows::Win32::Graphics::Dxgi::{
+    IDXGIDevice, IDXGIFactory2, IDXGISwapChain, DXGI_SWAP_CHAIN_DESC,
+    DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH, DXGI_SWAP_EFFECT_DISCARD,
+    DXGI_USAGE_RENDER_TARGET_OUTPUT,
+};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoop;
@@ -36,13 +49,13 @@ fn create_device_with_type(drive_type: D3D_DRIVER_TYPE) -> Result<ID3D11Device> 
         D3D11CreateDevice(
             None,
             drive_type,
-            HINSTANCE::default(),
+            Some(HINSTANCE::default()),
             flags,
-            &feature_levels,
+            Some(&feature_levels),
             D3D11_SDK_VERSION,
-            &mut device,
-            &mut fl,
-            &mut None,
+            Some(&mut device),
+            Some(&mut fl),
+            None,
         )
         .map(|()| device.unwrap())
     }
@@ -71,8 +84,13 @@ fn create_swapchain(device: &ID3D11Device, window: HWND) -> Result<IDXGISwapChai
         SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
         Flags: DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.0 as u32,
     };
-
-    unsafe { factory.CreateSwapChain(device, &sc_desc) }
+    let mut swapchain: Option<IDXGISwapChain> = None;
+    let hresult = unsafe { factory.CreateSwapChain(device, &sc_desc, &mut swapchain) };
+    if let (Some(swapchain), true) = (swapchain, hresult.is_ok()) {
+        Ok(swapchain)
+    } else {
+        Err(hresult.into())
+    }
 }
 
 fn get_dxgi_factory(device: &ID3D11Device) -> Result<IDXGIFactory2> {
@@ -86,7 +104,7 @@ fn create_render_target(
 ) -> Result<ID3D11RenderTargetView> {
     unsafe {
         let backbuffer: ID3D11Resource = swapchain.GetBuffer(0)?;
-        device.CreateRenderTargetView(&backbuffer, 0 as _)
+        device.CreateRenderTargetView(&backbuffer, None)
     }
 }
 
@@ -134,24 +152,24 @@ fn main() -> Result<()> {
         Event::RedrawRequested(_) => {
             unsafe {
                 if let Some(ref context) = device_ctx {
-                    context.OMSetRenderTargets(&[target.clone()], None);
+                    context.OMSetRenderTargets(Some(&[target.clone()]), None);
                     context.ClearRenderTargetView(target.as_ref().unwrap(), &0.6);
                 }
             }
             let ui = imgui.frame();
-            imgui::Window::new("Hello world")
-                .size([300.0, 100.0], imgui::Condition::FirstUseEver)
-                .build(&ui, || {
+            ui.window("Hello World").size([300.0, 100.0], imgui::Condition::FirstUseEver).build(
+                || {
                     ui.text("Hello world!");
                     ui.text("This...is...imgui-rs!");
                     ui.separator();
                     let mouse_pos = ui.io().mouse_pos;
                     ui.text(format!("Mouse Position: ({:.1},{:.1})", mouse_pos[0], mouse_pos[1]));
-                });
+                },
+            );
             ui.show_demo_window(&mut true);
 
             platform.prepare_render(&ui, &window);
-            renderer.render(ui.render()).unwrap();
+            renderer.render(imgui.render()).unwrap();
             unsafe {
                 swapchain.Present(1, 0).unwrap();
             }
@@ -164,6 +182,7 @@ fn main() -> Result<()> {
             ..
         } => {
             target = None;
+
             unsafe {
                 swapchain.ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0).unwrap();
             }
