@@ -38,11 +38,11 @@ fn create_device_with_type(drive_type: D3D_DRIVER_TYPE) -> Result<ID3D11Device> 
             drive_type,
             HINSTANCE::default(),
             flags,
-            &feature_levels,
+            Some(&feature_levels),
             D3D11_SDK_VERSION,
-            &mut device,
-            &mut fl,
-            &mut None,
+            Some(&mut device),
+            Some(&mut fl),
+            None,
         )
         .map(|()| device.unwrap())
     }
@@ -71,8 +71,13 @@ fn create_swapchain(device: &ID3D11Device, window: HWND) -> Result<IDXGISwapChai
         SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
         Flags: DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.0 as u32,
     };
-
-    unsafe { factory.CreateSwapChain(device, &sc_desc) }
+    let mut swapchain: Option<IDXGISwapChain> = None;
+    let hresult = unsafe { factory.CreateSwapChain(device, &sc_desc, &mut swapchain)};
+    if let (Some(swapchain), true) = (swapchain, hresult.is_ok()){
+        Ok(swapchain)
+    }else{
+        Err(hresult.into())
+    }
 }
 
 fn get_dxgi_factory(device: &ID3D11Device) -> Result<IDXGIFactory2> {
@@ -86,7 +91,7 @@ fn create_render_target(
 ) -> Result<ID3D11RenderTargetView> {
     unsafe {
         let backbuffer: ID3D11Resource = swapchain.GetBuffer(0)?;
-        device.CreateRenderTargetView(&backbuffer, 0 as _)
+        device.CreateRenderTargetView(&backbuffer, None)
     }
 }
 
@@ -134,7 +139,7 @@ fn main() -> Result<()> {
         Event::RedrawRequested(_) => {
             unsafe {
                 if let Some(ref context) = device_ctx {
-                    context.OMSetRenderTargets(&[target.clone()], None);
+                    context.OMSetRenderTargets(Some(&[target.clone()]), None);
                     context.ClearRenderTargetView(target.as_ref().unwrap(), &0.6);
                 }
             }
