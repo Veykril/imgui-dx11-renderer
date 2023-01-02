@@ -3,9 +3,7 @@
 #![no_std]
 //! This crate offers a DirectX 11 renderer for the [imgui-rs](https://docs.rs/imgui/*/imgui/) rust bindings.
 
-extern crate alloc;
-use alloc::vec;
-use alloc::vec::Vec;
+
 use core::{mem, slice};
 
 use windows::core::{Result, PCSTR};
@@ -237,14 +235,14 @@ impl Renderer {
         );
         ctx.IASetIndexBuffer(self.index_buffer.get_buf(), draw_fmt, 0);
         ctx.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        ctx.VSSetShader(&self.vertex_shader, Some(&[]));
+        ctx.VSSetShader(&self.vertex_shader, None);
         ctx.VSSetConstantBuffers(0, Some(&[Some(self.constant_buffer.clone())]));
-        ctx.PSSetShader(&self.pixel_shader, Some(&[]));
+        ctx.PSSetShader(&self.pixel_shader, None);
         ctx.PSSetSamplers(0, Some(&[Some(self.font_sampler.clone())]));
-        ctx.GSSetShader(None, Some(&[]));
-        ctx.HSSetShader(None, Some(&[]));
-        ctx.DSSetShader(None, Some(&[]));
-        ctx.CSSetShader(None, Some(&[]));
+        ctx.GSSetShader(None, None);
+        ctx.HSSetShader(None, None);
+        ctx.DSSetShader(None, None);
+        ctx.CSSetShader(None, None);
         ctx.OMSetBlendState(&self.blend_state, Some(&blend_factor), 0xFFFFFFFF);
         ctx.OMSetDepthStencilState(&self.depth_stencil_state, 0);
         ctx.RSSetState(&self.rasterizer_state);
@@ -494,7 +492,7 @@ impl Buffer {
 }
 
 #[derive(Debug, Default)]
-struct StateBackup {
+struct StateBackup<'a> {
     context: Option<ID3D11DeviceContext>,
     scissor_rects: RECT,
     viewports: D3D11_VIEWPORT,
@@ -504,13 +502,13 @@ struct StateBackup {
     sample_mask: u32,
     depth_stencil_state: Option<ID3D11DepthStencilState>,
     stencil_ref: u32,
-    shader_resource: Vec<Option<ID3D11ShaderResourceView>>,
-    sampler: Vec<Option<ID3D11SamplerState>>,
+    shader_resource: &'a mut [Option<ID3D11ShaderResourceView>],
+    sampler: &'a mut [Option<ID3D11SamplerState>],
     ps_shader: Option<ID3D11PixelShader>,
     ps_instances: Option<ID3D11ClassInstance>,
     vs_shader: Option<ID3D11VertexShader>,
     vs_instances: Option<ID3D11ClassInstance>,
-    constant_buffer: Vec<Option<ID3D11Buffer>>,
+    constant_buffer: &'a mut[Option<ID3D11Buffer>],
     gs_shader: Option<ID3D11GeometryShader>,
     gs_instances: Option<ID3D11ClassInstance>,
     index_buffer: Option<ID3D11Buffer>,
@@ -523,7 +521,7 @@ struct StateBackup {
     input_layout: Option<ID3D11InputLayout>,
 }
 
-impl StateBackup {
+impl<'a> StateBackup<'a> {
     unsafe fn backup(context: Option<ID3D11DeviceContext>) -> Self {
         let mut result = Self::default();
 
@@ -575,14 +573,10 @@ impl StateBackup {
         result.context = context;
         result
     }
-    pub fn restore(mut self) {
+    pub fn restore(self) {
         unsafe {
             let ctx = self.context.as_ref().unwrap();
-            let inst =
-                if self.ps_instances.is_some() { vec![self.ps_instances.take()] } else { vec![] };
-            let vinst =
-                if self.vs_instances.is_some() { vec![self.vs_instances.take()] } else { vec![] };
-
+            
             ctx.RSSetScissorRects(Some(&[self.scissor_rects]));
             ctx.RSSetViewports(Some(&[self.viewports]));
             if let Some(rasterizer_state) = self.rasterizer_state {
@@ -596,15 +590,15 @@ impl StateBackup {
             }
             ctx.PSSetShaderResources(0, Some(&self.shader_resource));
             ctx.PSSetSamplers(0, Some(&self.sampler));
-            if let Some(ps_shader) = self.ps_shader {
-                ctx.PSSetShader(&ps_shader, Some(&inst));
+            if let (Some(ps_shader), Some(ps_instances)) = (self.ps_shader, self.ps_instances) {
+                ctx.PSSetShader(&ps_shader, Some([Some(ps_instances)].as_slice()));
             }
-            if let Some(vs_shader) = self.vs_shader {
-                ctx.VSSetShader(&vs_shader, Some(&vinst));
+            if let (Some(vs_shader), Some(vs_instances)) = (self.vs_shader, self.vs_instances) {
+                ctx.VSSetShader(&vs_shader, Some([Some(vs_instances)].as_slice()));
             }
             ctx.VSSetConstantBuffers(0, Some(&self.constant_buffer));
             if let Some(gs_shader) = self.gs_shader {
-                ctx.GSSetShader(&gs_shader, Some(&[]));
+                ctx.GSSetShader(&gs_shader, None);
             }
             ctx.IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             if let Some(index_buffer) = self.index_buffer {
