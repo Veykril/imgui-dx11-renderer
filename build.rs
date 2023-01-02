@@ -1,9 +1,9 @@
 use std::error::Error;
-use std::ptr::null;
 use std::{env, fs, slice, str};
 
 use windows::Win32::Graphics::Direct3D::Fxc::D3DCompile;
 use windows::Win32::Graphics::Direct3D::ID3DBlob;
+use windows::s;
 
 fn main() -> Result<(), Box<dyn Error + 'static>> {
     static VERTEX_SHADER: &str = include_str!("src/vertex_shader.vs_4_0");
@@ -18,14 +18,14 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
             VERTEX_SHADER.as_ptr() as _,
             VERTEX_SHADER.len(),
             None,
-            null(),
             None,
-            "main\0",
-            "vs_4_0\0",
+            None,
+            s!("main"),
+            s!("vs_4_0"),
             0,
             0,
             &mut vs_blob,
-            &mut err,
+            Some(&mut err),
         )?;
         if let Some(vs_blob) = vs_blob.as_ref() {
             write_blob("vertex_shader.vs_4_0", vs_blob)?;
@@ -35,14 +35,14 @@ fn main() -> Result<(), Box<dyn Error + 'static>> {
             PIXEL_SHADER.as_ptr() as _,
             PIXEL_SHADER.len(),
             None,
-            null(),
             None,
-            "main\0",
-            "ps_4_0\0",
+            None,
+            s!("main"),
+            s!("ps_4_0"),
             0,
             0,
             &mut ps_blob,
-            &mut err,
+            Some(&mut err),
         )?;
         if let Some(ps_blob) = ps_blob.as_ref() {
             write_blob("pixel_shader.ps_4_0", ps_blob)?;
