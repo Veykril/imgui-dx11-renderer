@@ -3,12 +3,13 @@ use std::time::Instant;
 
 use imgui::{Context, FontConfig, FontSource};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
+
+use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE, D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_10_0, D3D_DRIVER_TYPE_HARDWARE};
+use windows::Win32::Graphics::Direct3D11::{D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_CREATE_DEVICE_DEBUG, ID3D11Device, D3D11_SDK_VERSION, D3D11CreateDevice, ID3D11RenderTargetView, ID3D11Resource};
+use windows::Win32::Graphics::Dxgi::Common::{DXGI_MODE_DESC, DXGI_RATIONAL, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC, DXGI_FORMAT_UNKNOWN};
+use windows::Win32::Graphics::Dxgi::{IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_USAGE_RENDER_TARGET_OUTPUT, DXGI_SWAP_EFFECT_DISCARD, DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH, IDXGIFactory2, IDXGIDevice};
+use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::core::Interface;
-use windows::Win32::Foundation::*;
-use windows::Win32::Graphics::Direct3D::*;
-use windows::Win32::Graphics::Direct3D11::*;
-use windows::Win32::Graphics::Dxgi::Common::*;
-use windows::Win32::Graphics::Dxgi::*;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::EventLoop;
@@ -36,7 +37,7 @@ fn create_device_with_type(drive_type: D3D_DRIVER_TYPE) -> Result<ID3D11Device> 
         D3D11CreateDevice(
             None,
             drive_type,
-            HINSTANCE::default(),
+            Some(HINSTANCE::default()),
             flags,
             Some(&feature_levels),
             D3D11_SDK_VERSION,
@@ -144,9 +145,9 @@ fn main() -> Result<()> {
                 }
             }
             let ui = imgui.frame();
-            imgui::Window::new("Hello world")
+            ui.window("Hello World")
                 .size([300.0, 100.0], imgui::Condition::FirstUseEver)
-                .build(&ui, || {
+                .build(|| {
                     ui.text("Hello world!");
                     ui.text("This...is...imgui-rs!");
                     ui.separator();
@@ -156,7 +157,7 @@ fn main() -> Result<()> {
             ui.show_demo_window(&mut true);
 
             platform.prepare_render(&ui, &window);
-            renderer.render(ui.render()).unwrap();
+            renderer.render(imgui.render()).unwrap();
             unsafe {
                 swapchain.Present(1, 0).unwrap();
             }
@@ -169,6 +170,7 @@ fn main() -> Result<()> {
             ..
         } => {
             target = None;
+            
             unsafe {
                 swapchain.ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0).unwrap();
             }

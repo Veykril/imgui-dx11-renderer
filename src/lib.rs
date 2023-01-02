@@ -325,7 +325,7 @@ impl Renderer {
     }
 
     unsafe fn create_font_texture(
-        mut fonts: imgui::FontAtlasRefMut<'_>,
+        fonts: &mut imgui::FontAtlas,
         device: &ID3D11Device,
     ) -> Result<(ID3D11ShaderResourceView, ID3D11SamplerState)> {
         let fa_tex = fonts.build_rgba32_texture();
